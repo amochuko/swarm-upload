@@ -1,0 +1,18 @@
+{
+  "name": "swarm-upload",
+  "version": "1.0.0",
+  "description": "CLI app for streaming upload to Swarm",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node ./src/index"
+  },
+  "author": "ochuko awhe",
+  "license": "MIT",
+  "keywords": [
+    "swarm"
+  ],
+  "dependencies": {
+    "@ethersphere/bee-js": "^6.7.4"
+  }
+}
