@@ -45,6 +45,51 @@ async function parseUrlFlag(flagPath) {
   });
 }
 
+async function fetchAndUploadToSwarm(urls, beenNodeURL, stampBatchId) {
+  const bee = new Bee(beenNodeURL, {});
+
+  // To hold generated `tag` that is need to keep track of upload status
+  const tagArr = [];
+
+  for (let i = 0; i < urls.length; i++) {
+    try {
+      // generate tag
+      const tag = await bee.createTag();
+      tagArr.push(tag);
+
+      console.log(`\n===================================================\n`);
+
+      console.log(`\nDownload started from ${urls[i]}...\n`);
+      axios.get(urls[i], { responseType: "stream" }).then(async (res) => {
+        console.log(
+          `Using stamp batch ID ${stampBatchId} to upload file to Bee node at ${beenNodeURL}\n`
+        );
+
+        const uploadResponse = await bee.uploadFile(
+          stampBatchId,
+          res.data,
+          "ada-love-lace",
+          {},
+          {
+            tag: tagArr[i].uid,
+            pinning: false,
+          }
+        );
+
+        if (uploadResponse.reference) {
+          console.log(`File uploaded successfully...\n`);
+          console.log(`filename: ${uploadResponse.filename}\nreferenceHash: ${
+            uploadResponse.reference
+          }\ntagUid: ${uploadResponse.tagUid}\ncid: ${uploadResponse.cid()}
+              `);
+        }
+        console.log(`\n===================================================\n`);
+      });
+    } catch (err) {
+      console.error(`\nUpload to Swarm Network failed with: ${err}\n`);
+    }
+  }
+}
 
 
 main();
