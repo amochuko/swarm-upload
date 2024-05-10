@@ -1,22 +1,23 @@
+#!/usr/bin/env node
+
 // @ts-nocheck
-const readline = require('readline');
-const fs = require('fs');
-const { Bee, BeeDebug } = require('@ethersphere/bee-js');
 
-const bee = new Bee('http://localhost:3054');
-const beeDebug = new BeeDebug('http://127.0.0.1:1635');
+const fs = require("fs");
+const https = require("https");
+const path = require("path");
+const stream = require("node:stream");
+const fsPromise = require("fs/promises");
+const streamPromise = require("stream/promises");
+const { Bee, BeeDebug } = require("@ethersphere/bee-js");
+const axios = require("axios");
 
-(async function main() {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
+const args = process.argv.slice(2);
 
-  rl.question('Enter the URL to POST to: ', (url) => {
-    rl.question('Enter the data to POST (JSON format): ', (data) => {
-      const jsonData = JSON.parse(data);
+// Validate the URL
+function isValidURL(url) {
+  const urlRegex = /^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$/;
+  return urlRegex.test(url);
+}
 
-      console.log(jsonData);
-    });
-  });
-})();
+
+main();
