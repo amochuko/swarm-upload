@@ -13,6 +13,7 @@
     "swarm"
   ],
   "dependencies": {
-    "@ethersphere/bee-js": "^6.7.4"
+    "@ethersphere/bee-js": "^6.7.4",
+    "axios": "^1.6.8"
   }
 }
