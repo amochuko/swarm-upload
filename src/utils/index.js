@@ -6,7 +6,7 @@ const { Bee, BeeDebug } = require("@ethersphere/bee-js");
 /**
  * The function validates the URL
  * @param {*} url path to the file
- * @returns
+ * @returns boolean
  */
 function isValidURL(url) {
   const urlRegex = /^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$/;
@@ -16,41 +16,34 @@ function isValidURL(url) {
 /**
  * This function receives the file path / url and goes ahead
  * to get the file it links to
- * @param {*} flagPath The location of the file
- * @returns
+ * @param {*} filePath The location of the file
+ * @returns file content
  */
-async function parseUrlFlag(flagPath) {
-  if (isValidURL(flagPath)) {
-    return [flagPath];
+async function parseUrlFlag(filePath) {
+  if (isValidURL(filePath)) {
+    return [filePath];
   }
 
-  const sourceFilePath = path.join(__dirname, flagPath);
-  let data;
+  let fetchedFile;
 
-  return await new Promise((resolve, reject) => {
-    // Check if the file exists in the current directory.
-    fs.access(sourceFilePath, (err) => {
-      if (err) {
-        console.error(`\nThe file at ${sourceFilePath} does not exist.\n`);
-        resolve(false);
-      } else {
-        fs.readFile(sourceFilePath, { encoding: "utf-8" }, (err_, res) => {
-          if (!err_) {
-            data = res.trim().split(/\n/);
-          }
-          resolve(data);
-        });
-      }
-    });
-  });
+  // Check if the path is absolute
+  if (path.isAbsolute(filePath)) {
+    fetchedFile = await fetchFile(filePath);
+  } else {
+    // Assuming the file is in the current directory or a subdirectory
+    const absolutePath = path.join(process.cwd(), filePath);
+    fetchedFile = await fetchFile(absolutePath);
+  }
+
+  return fetchedFile;
 }
 
 /**
  * This function uses the urls given it to fetch the
  * pointed file and automatically upload to the Swarm Network
- * @param {*} urls The location of the file 
- * @param {*} beenNodeURL The Bee Node url 
- * @param {*} stampBatchId The postage stamp id 
+ * @param {*} urls The location of the file
+ * @param {*} beenNodeURL The Bee Node url
+ * @param {*} stampBatchId The postage stamp id
  */
 async function fetchAndUploadToSwarm(urls, beenNodeURL, stampBatchId) {
   const bee = new Bee(beenNodeURL, {});
@@ -99,8 +92,28 @@ async function fetchAndUploadToSwarm(urls, beenNodeURL, stampBatchId) {
   }
 }
 
+/**
+ * This function fetches the file
+ * @param {*} filePath The location of the file
+ */
+function fetchFile(filePath) {
+  return new Promise((resolve, reject) => {
+    if (!fs.existsSync(filePath)) {
+      reject(`File ${filePath} does not exist.`);
+    } else {
+      fs.readFile(filePath, { encoding: "utf-8" }, (err, res) => {
+        if (!err) {
+          resolve(res.trim().split(/\n/));
+        }
+        reject(err);
+      });
+    }
+  });
+}
+
 module.exports = {
   isValidURL,
+  fetchFile,
   parseUrlFlag,
   fetchAndUploadToSwarm,
 };
