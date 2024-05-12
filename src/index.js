@@ -5,7 +5,7 @@ const { parseUrlFlag, fetchAndUploadToSwarm } = require("./utils");
 const args = process.argv.slice(2);
 
 async function main() {
-  if (args.length > 0 && args[0] == "--help") {
+  if (args.length > 0 && args[0] === "--help") {
     console.log("\nSwarm upload");
     console.log(
       `\nThis cli lets you upload a file to the Swarm Network via the file's URL or a path to a file containing a list of such URLs\n`
@@ -47,7 +47,7 @@ async function main() {
     const urls = await parseUrlFlag(url);
     await fetchAndUploadToSwarm(urls, beeNode, stampBatchId);
   } catch (err) {
-    console.error(`URLs parsing failed with error: ${err.message}`);
+    console.error(`URLs parsing failed with error: ${err}`);
   }
 }
 
