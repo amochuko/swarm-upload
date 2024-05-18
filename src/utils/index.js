@@ -20,7 +20,6 @@ function isValidURL(url) {
  * @returns file content
  */
 async function parseUrlFlag(filePath, fileName) {
-  // console.log("yes: ", fileName, filePath);
   if (isValidURL(filePath)) {
     return [{ url: filePath, fileName }];
   }
@@ -29,7 +28,6 @@ async function parseUrlFlag(filePath, fileName) {
 
   // Check if the path is absolute
   if (path.isAbsolute(filePath)) {
-    console.log("path.isAbsolute: ", path.isAbsolute(filePath));
     fetchedFile = await fetchFile(filePath);
   } else {
     // Assuming the file is in the current directory or a subdirectory
@@ -49,18 +47,16 @@ async function parseUrlFlag(filePath, fileName) {
  */
 async function fetchAndUploadToSwarm(urls, beenNodeURL, stampBatchId) {
   const parsedUrls = splitPath(urls);
+  console.log("parsedUrls: ", parsedUrls);
 
   const bee = new Bee(beenNodeURL, {});
 
   // To hold generated `tag` that is need to keep track of upload status
   const tagArr = [];
 
-  // replace old code
   for (let i = 0; i < parsedUrls.length; i++) {
-    console.log(parsedUrls[i]);
-
     try {
-      // generate tag
+      // generate tag for which is meant for tracking progres of syncing data across network.
       const tag = await bee.createTag({});
       tagArr.push(tag);
 
@@ -68,8 +64,9 @@ async function fetchAndUploadToSwarm(urls, beenNodeURL, stampBatchId) {
 
       console.log(`\nDownload started from ${parsedUrls[i].filePath}...\n`);
 
-      // @ts-ignore
-      axios.get(parsedUrls[i].filePath, { responseType: "stream" })
+      axios
+        // @ts-ignore
+        .get(parsedUrls[i].filePath, { responseType: "stream" })
         .then(async (res) => {
           console.log(
             `Using stamp batch ID ${stampBatchId} to upload file to Bee node at ${beenNodeURL}\n`
@@ -103,12 +100,16 @@ async function fetchAndUploadToSwarm(urls, beenNodeURL, stampBatchId) {
   }
 }
 
-function splitPath(urls) {
-  return urls.map((url) => {
-    const [filePath, fileName] = url.split(" ");
-
-    return { filePath, fileName };
-  });
+function splitPath(urlPaths) {
+  // Determine if the urlPaths is one item
+  if (urlPaths.length === 1) {
+    return [{ filePath: urlPaths[0].url, fileName: urlPaths[0].fileName }];
+  } else {
+    return urlPaths.map((path) => {
+      const [filePath, fileName] = path.split(" ");
+      return { filePath, fileName };
+    });
+  }
 }
 
 /**
