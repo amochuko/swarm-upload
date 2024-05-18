@@ -19,15 +19,17 @@ function isValidURL(url) {
  * @param {*} filePath The location of the file
  * @returns file content
  */
-async function parseUrlFlag(filePath) {
+async function parseUrlFlag(filePath, fileName) {
+  // console.log("yes: ", fileName, filePath);
   if (isValidURL(filePath)) {
-    return [filePath];
+    return [{ url: filePath, fileName }];
   }
 
   let fetchedFile;
 
   // Check if the path is absolute
   if (path.isAbsolute(filePath)) {
+    console.log("path.isAbsolute: ", path.isAbsolute(filePath));
     fetchedFile = await fetchFile(filePath);
   } else {
     // Assuming the file is in the current directory or a subdirectory
@@ -46,12 +48,17 @@ async function parseUrlFlag(filePath) {
  * @param {*} stampBatchId The postage stamp id
  */
 async function fetchAndUploadToSwarm(urls, beenNodeURL, stampBatchId) {
+  const parsedUrls = splitPath(urls);
+
   const bee = new Bee(beenNodeURL, {});
 
   // To hold generated `tag` that is need to keep track of upload status
   const tagArr = [];
 
-  for (let i = 0; i < urls.length; i++) {
+  // replace old code
+  for (let i = 0; i < parsedUrls.length; i++) {
+    console.log(parsedUrls[i]);
+
     try {
       // generate tag
       const tag = await bee.createTag({});
@@ -59,37 +66,49 @@ async function fetchAndUploadToSwarm(urls, beenNodeURL, stampBatchId) {
 
       console.log(`\n===================================================\n`);
 
-      console.log(`\nDownload started from ${urls[i]}...\n`);
+      console.log(`\nDownload started from ${parsedUrls[i].filePath}...\n`);
+
       // @ts-ignore
-      axios.get(urls[i], { responseType: "stream" }).then(async (res) => {
-        console.log(
-          `Using stamp batch ID ${stampBatchId} to upload file to Bee node at ${beenNodeURL}\n`
-        );
+      axios.get(parsedUrls[i].filePath, { responseType: "stream" })
+        .then(async (res) => {
+          console.log(
+            `Using stamp batch ID ${stampBatchId} to upload file to Bee node at ${beenNodeURL}\n`
+          );
 
-        const uploadResponse = await bee.uploadFile(
-          stampBatchId,
-          res.data,
-          "ada-love-lace",
-          {},
-          {
-            tag: tagArr[i].uid,
-            pinning: false,
+          const uploadResponse = await bee.uploadFile(
+            stampBatchId,
+            res.data,
+            parsedUrls[i].filename,
+            {},
+            {
+              tag: tagArr[i].uid,
+              pinning: false,
+            }
+          );
+
+          if (uploadResponse.reference) {
+            console.log(`File uploaded successfully...\n`);
+            console.log(`filename: ${uploadResponse.filename}\nreferenceHash: ${
+              uploadResponse.reference
+            }\ntagUid: ${uploadResponse.tagUid}\ncid: ${uploadResponse.cid()}
+            `);
           }
-        );
-
-        if (uploadResponse.reference) {
-          console.log(`File uploaded successfully...\n`);
-          console.log(`filename: ${uploadResponse.filename}\nreferenceHash: ${
-            uploadResponse.reference
-          }\ntagUid: ${uploadResponse.tagUid}\ncid: ${uploadResponse.cid()}
-              `);
-        }
-        console.log(`\n===================================================\n`);
-      });
+          console.log(
+            `\n===================================================\n`
+          );
+        });
     } catch (err) {
       console.error(`\nUpload to Swarm Network failed with: ${err}\n`);
     }
   }
+}
+
+function splitPath(urls) {
+  return urls.map((url) => {
+    const [filePath, fileName] = url.split(" ");
+
+    return { filePath, fileName };
+  });
 }
 
 /**
