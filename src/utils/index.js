@@ -105,19 +105,19 @@ async function fetchAndUploadToSwarm(urls, beenNodeURL, stampBatchId) {
   const tagArr = [];
 
   const parsedUrls = splitPath(urls);
-  console.log("parsedUrls: ", parsedUrls);
 
   for (let i = 0; i < parsedUrls.length; i++) {
     try {
       // generate tag for which is meant for tracking progres of syncing data across network.
-
       const tag = await bee.createTag({});
       tagArr.push(tag);
 
+      console.log(`\n#####\n`);
       console.log(`\nDownload started from ${parsedUrls[i].filePath}...\n`);
       console.log(
         `Using stamp batch ID ${stampBatchId} to upload file to Bee node at ${beenNodeURL}\n`
       );
+      console.log(`\n#####\n`);
 
       let uploadResponse;
 
@@ -127,36 +127,30 @@ async function fetchAndUploadToSwarm(urls, beenNodeURL, stampBatchId) {
           responseType: "arraybuffer",
         });
 
-        uploadResponse = await bee.uploadFile(
+        uploadResponse = await beeUpload(
+          bee,
           stampBatchId,
-          Buffer.from(res.data),
-          `${parsedUrls[i].fileName}${getFileExtension(
-            parsedUrls[i].filePath
-          )}`,
-          {},
-          { tag: tagArr[i].uid, pinning: false }
+          res.data,
+          parsedUrls[i].filePath,
+          parsedUrls[i].fileName,
+          tagArr[i].uid
         );
       } else {
-        console.log("filepath: ", parsedUrls[0]);
 
-        const fil = new File([parsedUrls[i].filePath], parsedUrls[i].fileName);
-        console.log("file: ", fil);
-
-        uploadResponse = await bee.uploadFile(
+        const data = fs.readFileSync(parsedUrls[i].filePath);
+        uploadResponse = await beeUpload(
+          bee,
           stampBatchId,
+          data,
           parsedUrls[i].filePath,
-          parsedUrls[i].filename,
-          {},
-          {
-            tag: tagArr[i].uid,
-            pinning: false,
-          }
+          parsedUrls[i].fileName,
+          tagArr[i].uid
         );
       }
 
       const intervalId = setInterval(() => {
         Array(2)
-          .fill("-")
+          .fill("~")
           .forEach((itm) => {
             console.log(itm);
           });
@@ -164,7 +158,7 @@ async function fetchAndUploadToSwarm(urls, beenNodeURL, stampBatchId) {
 
       setTimeout(() => {
         if (uploadResponse.reference) {
-          console.log(`File uploaded successfully...\n`);
+          console.log(`\nFile uploaded successfully...\n`);
           console.log(`Filename: ${parsedUrls[i].fileName}\nReferenceHash: ${
             uploadResponse.reference
           }\nAccess file: https://gateway.ethswarm.org/access/${
@@ -226,6 +220,34 @@ function fetchFile(filePath, fileName) {
     console.error(`Error reading file: ${err.message}`);
     throw err;
   }
+}
+
+/**
+ * Function that encapsulate the `bee` upload
+ * @param {Object} [bee] A active Bee node
+ * @param {undefined} [stampBatchId] The stamp Id
+ * @param {ArrayBuffer | any} [data] An ArrayBuffer
+ * @param {undefined} [filePath] Path to a file
+ * @param {undefined} [fileName] Name of the file
+ * @param {undefined} [tag] A generated Bee tag that can be used to track upload progress
+ */
+async function beeUpload(
+  bee,
+  stampBatchId,
+  data,
+  filePath,
+  fileName,
+  tag,
+  pinning = false
+) {
+  // @ts-ignore
+  return await bee.uploadFile(
+    stampBatchId,
+    Buffer.from(data),
+    `${fileName}${getFileExtension(filePath)}`,
+    {},
+    { tag, pinning }
+  );
 }
 
 module.exports = {
