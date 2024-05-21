@@ -2,16 +2,25 @@
   "name": "swarm-upload",
   "version": "1.0.0",
   "description": "CLI app for streaming upload to Swarm",
-  "main": "index.js",
+  "main": "src/index.js",
+  
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node ./src/index"
+    "start": "node ./src/index.js"
   },
   "author": "ochuko awhe",
   "license": "MIT",
   "keywords": [
     "swarm"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amochuko/swarm-upload.git"
+  },
+  "bugs": {
+    "url": "https://github.com/amochuko/swarm-upload/issues"
+  },
+  "homepage": "https://github.com/amochuko/swarm-upload",
   "dependencies": {
     "@ethersphere/bee-js": "^6.7.4",
     "axios": "^1.6.8"
