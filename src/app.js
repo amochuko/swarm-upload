@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { parseUrlFlag, fetchAndUploadToSwarm, isValidURL } = require("./utils");
+const { parseUrlFlag, fetchAndUploadToSwarm, isValidURL, fileTypeIsNotDotTxt } = require("./utils");
 
 const args = process.argv.slice(2);
 
@@ -54,6 +54,14 @@ async function main() {
     process.exit(1);
   }
 
+  // check if path is a valid uri; then request for filename
+  if (!isValidURL(filePath) && fileTypeIsNotDotTxt(filePath) && !fileName) {
+    console.error(
+      "\nError: File name is required. Please provide a filename using --filename <replace-with-your-filename>.\n"
+    );
+    process.exit(1);
+  }
+
   if (!beeNodeUrl) {
     console.error(
       "\nError: Bee node url is required. Please provide a bee-node-url using --bee-node-url <replace-with-your-bee-node-url>.\n"
@@ -71,10 +79,10 @@ async function main() {
   try {
     const urls = await parseUrlFlag(filePath, fileName);
 
-    await fetchAndUploadToSwarm(urls, beeNodeUrl, stampBatchId);
+   await fetchAndUploadToSwarm(urls, beeNodeUrl, stampBatchId);
   } catch (err) {
     console.error(err);
-    throw new Error(err);
+    throw err;
   }
 }
 
