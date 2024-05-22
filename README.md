@@ -35,4 +35,4 @@ npm start
 
     Example usage:
      
-    swarm-upload  --file-path <replace-with-your-file-path | url-to-file | filepath-containing-list-of-url(s)> --filename <replace-with-your-filename> --bee-node-url <replace-with-your-bee-node-urll> --stamp-batch-id <replace-with-your-stamp-batch-id-here>
+    swarm-upload  --file-path <replace-with-your-file-path | url-to-file | filepath-containing-list-of-url(s)> --filename <replace-with-your-filename> --bee-node-url <replace-with-your-bee-node-urll> --stamp-batch-id <replace-with-your-stamp-batch-id>
