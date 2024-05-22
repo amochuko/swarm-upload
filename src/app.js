@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 
-const { parseUrlFlag, fetchAndUploadToSwarm, isValidURL, fileTypeIsNotDotTxt } = require("./utils");
+const {
+  parsePathFlag,
+  fetchAndUploadToSwarm,
+  isValidURL,
+  fileTypeIsNotDotTxt,
+} = require("./utils");
 
 const args = process.argv.slice(2);
 
@@ -14,14 +19,14 @@ async function main() {
   to a file containing a list of such URLs.
 
   Flags:
-    --file-path                   A single URL or path to a file containing a list of URLs
-    --filename                   A name given to file
+    --file-path                 A single URL or path to a file containing a list of URLs
+    --filename                  A name given to file
     --bee-node-url              The URL of a Bee node to use
     --stamp-batch-id            The ID of the stamp batch to use on the Bee nod
 
   Usage:
 
-    node app.js --file-path <replace-with-your-file-url> --filename <replace-with-your-filename> --bee-node-url <replace-with-your-bee-node-url> --stamp-batch-id <replace-with-your-bee-node-url>
+    npm start -- --file-path <replace-with-your-file-path | url-to-file | filepath-containing-list-of-url(s)> --filename <replace-with-your-filename> --bee-node-url <replace-with-your-bee-node-url> --stamp-batch-id <replace-with-your-stamp-batch-id> 
 `);
   }
 
@@ -41,7 +46,7 @@ async function main() {
   // Validate and set default values if not provided
   if (!filePath) {
     console.error(
-      "\nError: File path or location is required. Please provide a filePath using --file-path <replace-with-your-file-path-or-file-url>.\n"
+      "\nError: File path or location is required. Please provide a filePath using --file-path <replace-with-your-file-path | url-to-file | filepath-containing-list-of-url(s)>.\n"
     );
     process.exit(1);
   }
@@ -71,15 +76,14 @@ async function main() {
 
   if (!stampBatchId) {
     console.error(
-      "\nError: Stamp Batch ID is required. Please provide a stamp Batch ID using --stamp-batch-id=<replace-with-your-bee-node-url>.\n"
+      "\nError: Stamp Batch ID is required. Please provide a stamp Batch ID using --stamp-batch-id <replace-with-your-bee-node-url>.\n"
     );
     process.exit(1);
   }
 
   try {
-    const urls = await parseUrlFlag(filePath, fileName);
-
-   await fetchAndUploadToSwarm(urls, beeNodeUrl, stampBatchId);
+    const paths = await parsePathFlag(filePath, fileName);
+    await fetchAndUploadToSwarm(paths, beeNodeUrl, stampBatchId);
   } catch (err) {
     console.error(err);
     throw err;

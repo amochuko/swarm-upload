@@ -71,24 +71,27 @@ function isValidURL(url) {
  * @param {*} filePath The location of the file
  * @returns file content
  */
-async function parseUrlFlag(filePath, fileName) {
+async function parsePathFlag(filePath, fileName) {
+  // if path is a single url to a file
   if (isValidURL(filePath)) {
     return [{ filePath, fileName }];
   }
 
-  // let fetchedFile;
+  // Normalize FilePath if filePath is local (relative or absolute)
+  const normalizePath = normalizeFilePath(filePath);
 
-  // // Check if the path is absolute
-  // if (path.isAbsolute(filePath)) {
-  //   fetchedFile =  fetchFile(filePath);
-  // } else {
-  //   // Assuming the file is in the current directory or a subdirectory
-  //   const absolutePath = path.join(process.cwd(), filePath);
-  //   fetchedFile = fetchFile(absolutePath);
-  // }
+  // Check if file exists
+  const fileExist = fs.existsSync(normalizePath);
+  if (!fileExist) {
+    throw new Error("File does not exist!");
+  }
 
-  // return fetchedFile;
-  return fetchFile(normalizeFilePath(filePath), fileName);
+  // Check if file type is not `.txt`
+  if (fileTypeIsNotDotTxt(normalizePath)) {
+    return [{ filePath, fileName }];
+  }
+
+  return fetchFile(normalizePath);
 }
 
 /**
@@ -97,23 +100,30 @@ async function parseUrlFlag(filePath, fileName) {
  * @param {*} urls The location of the file
  * @param {*} beenNodeURL The Bee Node url
  * @param {*} stampBatchId The postage stamp id
+ * @param {*} trackProgress A boolean to enable tracking of upload state
  */
-async function fetchAndUploadToSwarm(urls, beenNodeURL, stampBatchId) {
+async function fetchAndUploadToSwarm(
+  urls,
+  beenNodeURL,
+  stampBatchId,
+  trackProgress = false
+) {
   const bee = new Bee(beenNodeURL, {});
 
   // To hold generated `tag` that is need to keep track of upload status
   const tagArr = [];
 
-  const parsedUrls = splitPath(urls);
-
-  for (let i = 0; i < parsedUrls.length; i++) {
+  for (let i = 0; i < urls.length; i++) {
     try {
       // generate tag for which is meant for tracking progres of syncing data across network.
-      const tag = await bee.createTag({});
-      tagArr.push(tag);
+
+      if (trackProgress) {
+        const tag = await bee.createTag({});
+        tagArr.push(tag);
+      }
 
       console.log(`\n#####\n`);
-      console.log(`\nDownload started from ${parsedUrls[i].filePath}...\n`);
+      console.log(`\nDownload started from ${urls[i].filePath}...\n`);
       console.log(
         `Using stamp batch ID ${stampBatchId} to upload file to Bee node at ${beenNodeURL}\n`
       );
@@ -121,9 +131,9 @@ async function fetchAndUploadToSwarm(urls, beenNodeURL, stampBatchId) {
 
       let uploadResponse;
 
-      if (isValidURL(parsedUrls[i].filePath)) {
+      if (isValidURL(urls[i].filePath)) {
         // @ts-ignore
-        const res = await axios.get(parsedUrls[i].filePath, {
+        const res = await axios.get(urls[i].filePath, {
           responseType: "arraybuffer",
         });
 
@@ -131,20 +141,19 @@ async function fetchAndUploadToSwarm(urls, beenNodeURL, stampBatchId) {
           bee,
           stampBatchId,
           res.data,
-          parsedUrls[i].filePath,
-          parsedUrls[i].fileName,
-          tagArr[i].uid
+          urls[i].filePath,
+          urls[i].fileName,
+          trackProgress && tagArr[i].uid
         );
       } else {
-
-        const data = fs.readFileSync(parsedUrls[i].filePath);
+        const data = fs.readFileSync(urls[i].filePath);
         uploadResponse = await beeUpload(
           bee,
           stampBatchId,
           data,
-          parsedUrls[i].filePath,
-          parsedUrls[i].fileName,
-          tagArr[i].uid
+          urls[i].filePath,
+          urls[i].fileName,
+          trackProgress && tagArr[i].uid
         );
       }
 
@@ -159,7 +168,7 @@ async function fetchAndUploadToSwarm(urls, beenNodeURL, stampBatchId) {
       setTimeout(() => {
         if (uploadResponse.reference) {
           console.log(`\nFile uploaded successfully...\n`);
-          console.log(`Filename: ${parsedUrls[i].fileName}\nReferenceHash: ${
+          console.log(`Filename: ${urls[i].fileName}\nReferenceHash: ${
             uploadResponse.reference
           }\nAccess file: https://gateway.ethswarm.org/access/${
             uploadResponse.reference
@@ -182,40 +191,22 @@ async function fetchAndUploadToSwarm(urls, beenNodeURL, stampBatchId) {
  * @param {any[]} urlPaths
  */
 function splitPath(urlPaths) {
-  // Determine if the urlPaths is one item
-  if (urlPaths.length === 1) {
-    return urlPaths;
-  } else {
-    return urlPaths.map((path) => {
-      const [filePath, fileName] = path.split(" ");
-      return { filePath, fileName };
-    });
-  }
+  return urlPaths.map((path) => {
+    const [filePath, fileName] = path.split(" ");
+    return { filePath, fileName };
+  });
 }
 
 /**
  * This function fetches the file
  * @param {*} filePath The location of the file
  */
-function fetchFile(filePath, fileName) {
-  // Check if file exists
-  const fileExist = fs.existsSync(filePath);
-  if (!fileExist) {
-    throw new Error("File does not exist!");
-  }
-
-  // Check if file type is `.txt`
-  if (fileTypeIsNotDotTxt(filePath)) {
-    // return [filePath + " " + fileName];
-    // { filePath: urlPaths[0].url, fileName: urlPaths[0].fileName }
-    return [{ filePath, fileName }];
-  }
-
+function fetchFile(filePath) {
   try {
     const fileContent = fs.readFileSync(filePath, { encoding: "utf-8" });
     const lines = fileContent.trim().split(/\n/);
 
-    return lines;
+    return splitPath(lines);
   } catch (err) {
     console.error(`Error reading file: ${err.message}`);
     throw err;
@@ -252,8 +243,7 @@ async function beeUpload(
 
 module.exports = {
   isValidURL,
-  fetchFile,
-  parseUrlFlag,
+  parsePathFlag,
   fetchAndUploadToSwarm,
   fileTypeIsNotDotTxt,
 };
