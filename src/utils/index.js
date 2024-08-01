@@ -1,7 +1,8 @@
 const path = require("path");
 const fs = require("fs");
 const axios = require("axios");
-const { Bee, BeeDebug } = require("@ethersphere/bee-js");
+const { Bee } = require("@ethersphere/bee-js");
+const os = require("os");
 
 // Manually define some common MIME types for file extensions
 const mimeTypes = {
@@ -97,64 +98,54 @@ async function parsePathFlag(filePath, fileName) {
 /**
  * This function uses the urls given it to fetch the
  * pointed file and automatically upload to the Swarm Network
- * @param {*} urls The location of the file
- * @param {*} beenNodeURL The Bee Node url
- * @param {*} stampBatchId The postage stamp id
- * @param {*} trackProgress A boolean to enable tracking of upload state
+ * @param {string | any[]} urls The location of the file
+ * @param {string} beenNodeURL The Bee Node url
+ * @param {string} postageBatchId The postage stamp id
+ * @param {boolean} trackProgress A boolean to enable tracking of upload state
  */
 async function fetchAndUploadToSwarm(
   urls,
   beenNodeURL,
-  stampBatchId,
+  postageBatchId,
   trackProgress = false
 ) {
-  const bee = new Bee(beenNodeURL, {});
+  const bee = new Bee(beenNodeURL);
 
   // To hold generated `tag` that is need to keep track of upload status
   const tagArr = [];
+  let uploadResponse;
 
   for (let i = 0; i < urls.length; i++) {
     try {
       // generate tag for which is meant for tracking progres of syncing data across network.
-
       if (trackProgress) {
-        const tag = await bee.createTag({});
+        const tag = await bee.createTag();
+        console.log("tag here: ", tag);
         tagArr.push(tag);
       }
 
       console.log(`\n#####\n`);
       console.log(`\nDownload started from ${urls[i].filePath}...\n`);
       console.log(
-        `Using stamp batch ID ${stampBatchId} to upload file to Bee node at ${beenNodeURL}\n`
+        `Using stamp batch ID ${postageBatchId} to upload file to Bee node at ${beenNodeURL}\n`
       );
       console.log(`\n#####\n`);
 
-      let uploadResponse;
 
       if (isValidURL(urls[i].filePath)) {
-        // @ts-ignore
-        const res = await axios.get(urls[i].filePath, {
-          responseType: "arraybuffer",
-        });
+        const fileName = `${urls[i].fileName}${getFileExtension(
+          urls[i].filePath
+        )}`;
 
-        uploadResponse = await beeUpload(
+        uploadResponse = await downloadAndUpload(
           bee,
-          stampBatchId,
-          res.data,
+          postageBatchId,
           urls[i].filePath,
-          urls[i].fileName,
-          trackProgress && tagArr[i].uid
+          fileName,
+          trackProgress ? tagArr[i].uid : undefined
         );
       } else {
-        const data = fs.readFileSync(urls[i].filePath);
-        uploadResponse = await beeUpload(
-          bee,
-          stampBatchId,
-          data,
-          urls[i].filePath,
-          urls[i].fileName,
-          trackProgress && tagArr[i].uid
-        );
+        throw Error("Not a valid URL");
       }
 
       const intervalId = setInterval(() => {
@@ -166,14 +157,16 @@ async function fetchAndUploadToSwarm(
       }, 1000);
 
       setTimeout(() => {
-        if (uploadResponse.reference) {
+        if (uploadResponse) {
           console.log(`\nFile uploaded successfully...\n`);
           console.log(`Filename: ${urls[i].fileName}\nReferenceHash: ${
             uploadResponse.reference
           }\nAccess file: https://gateway.ethswarm.org/access/${
             uploadResponse.reference
           }\nTagUID: ${uploadResponse.tagUid}\nCID: ${uploadResponse.cid()}
-                    `);
+          `);
+
+          //
           clearInterval(intervalId);
         }
       }, 3000);
@@ -222,7 +215,7 @@ function fetchFile(filePath) {
  * @param {undefined} [fileName] Name of the file
  * @param {undefined} [tag] A generated Bee tag that can be used to track upload progress
  */
-async function beeUpload(
+async function beeUploadFile(
   bee,
   stampBatchId,
   data,
@@ -232,13 +225,78 @@ async function beeUpload(
   pinning = false
 ) {
   // @ts-ignore
+
+  console.log("stampBatchId: ", stampBatchId);
+  console.log("data: ", data);
+  console.log("filePath: ", filePath);
+  console.log("fileName: ", fileName);
+
   return await bee.uploadFile(
     stampBatchId,
-    Buffer.from(data),
+    data,
     `${fileName}${getFileExtension(filePath)}`,
     {},
     { tag, pinning }
   );
+}
+
+/**
+ * Function that encapsulate the `bee` upload
+ * @param {Bee} [bee] A active Bee node
+ * @param {string | import("@ethersphere/bee-js").BatchId} [postageBatchId] The stamp Id
+ * @param {string} [fileUrl] Path to a file
+ * @param {string | undefined} [fileName] Name of the file
+ * @param {number | undefined} [tag] A generated Bee tag that can be used to track upload progress
+ */
+async function downloadAndUpload(bee, postageBatchId, fileUrl, fileName, tag) {
+  try {
+    // Generate a unique temporary file name
+    const tempFilePath = path.join(os.tmpdir(), `temp-${Date.now()}.${"ext"}`);
+
+    // Download the file to the temporary location
+    // @ts-ignore
+    const resp = await axios({
+      method: "GET",
+      url: fileUrl,
+      responseType: "stream",
+    });
+
+    // Save the file to the temporary location
+    const writer = fs.createWriteStream(tempFilePath);
+    resp.data.pipe(writer);
+
+    await new Promise((res, rej) => {
+      writer.on("finish", res);
+      writer.on("error", rej);
+    });
+
+    // read temporary saved file
+    const readStream = fs.createReadStream(tempFilePath);
+    let uploadResp;
+
+    if (bee && postageBatchId) {
+      console.log('filename: ', fileName)
+      uploadResp = await bee.uploadFile(postageBatchId, readStream, fileName, {
+        tag,
+        // encrypt,
+        // deferred,
+        // contentType,
+        // pin,
+        // size,
+        // redundancyLevel
+      });
+    }
+
+    // clean up temporary filter:
+    fs.unlinkSync(tempFilePath);
+
+    return uploadResp;
+  } catch (err) {
+    console.error(
+      "Upload failed:",
+      err.response ? err.response.statusText : err.message
+    );
+  }
 }
 
 module.exports = {
