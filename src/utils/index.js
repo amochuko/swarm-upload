@@ -4,7 +4,8 @@ const axios = require("axios");
 const { Bee } = require("@ethersphere/bee-js");
 const os = require("os");
 
-const pathToLogFile = `./swarm-upload-result-${new Date().toISOString()}.txt`;
+const logDirPath = process.cwd() + "/logs";
+const pathToLogFile = `swarm-upload-log-${new Date().toISOString()}.txt`;
 
 // Manually define some common MIME types for file extensions
 const mimeTypes = {
@@ -160,9 +161,10 @@ async function fetchAndUploadToSwarm(
       setTimeout(() => {
         if (uploadResponse) {
           console.log(`\nFile uploaded successfully...\n`);
+          console.log(`cid: ${uploadResponse.cid}`);
 
           logToFile(
-            "",
+            pathToLogFile,
             `Filename: ${urls[i].fileName}\nReferenceHash: ${
               uploadResponse.reference
             }\nAccess file: https://gateway.ethswarm.org/access/${
@@ -170,8 +172,8 @@ async function fetchAndUploadToSwarm(
             }\nTagUID: ${uploadResponse.tagUid}\nCID: ${uploadResponse.cid()}
             `
           );
+          console.log(`\nReport logged to ${logDirPath}/${pathToLogFile}\n`);
 
-          console.log(`\nReport logged to ${pathToLogFile}\n`);
           clearInterval(intervalId);
         }
       }, 3000);
@@ -306,14 +308,38 @@ async function downloadAndUpload(bee, postageBatchId, fileUrl, fileName, tag) {
 
 /**
  * This function logs the report of a successful upload
- * @param {string} filePath file path to save the output; default path = "./swarm-upload-result.txt"
+ * @param {fs.PathOrFileDescriptor | undefined } filePath file path to save the output; default path = "./logs/swarm-upload-result-[timestamp].txt"
  * @param {string} content The content to be written
  */
 function logToFile(filePath = pathToLogFile, content) {
- 
-  fs.writeFileSync(filePath, content, {
-    encoding: "utf-8",
-  });
+  if (!fs.existsSync(logDirPath)) {
+    fs.mkdir(logDirPath, {}, (err) => {
+      if (err) {
+        throw Error(err.message);
+      }
+      writeContentToFile(process.cwd() + "/logs/" + pathToLogFile, content);
+    });
+  } else {
+    writeContentToFile(process.cwd() + "/logs/" + pathToLogFile, content);
+  }
+}
+
+/**
+ * Function that writes to file
+ * @param {string | fs.PathLike} filePath path to the file
+ * @param {string} data The content to be written
+ */
+function writeContentToFile(filePath, data) {
+  try {
+    const fd = fs.openSync(filePath, "wa"); // Open the file for writing
+    const buffer = Buffer.from(data); // Convert the data to a buffer
+    fs.writeSync(fd, buffer, 0, buffer.length, null); // Write the buffer to the file
+    fs.closeSync(fd); // Close the file descriptor
+    console.log("File written successfully");
+  } catch (err) {
+    console.error(`Error writing file: ${err}`);
+    throw err;
+  }
 }
 
 module.exports = {
@@ -321,4 +347,6 @@ module.exports = {
   parsePathFlag,
   fetchAndUploadToSwarm,
   fileTypeIsNotDotTxt,
+  logToFile,
+  pathToLogFile,
 };
