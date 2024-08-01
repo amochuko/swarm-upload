@@ -4,6 +4,8 @@ const axios = require("axios");
 const { Bee } = require("@ethersphere/bee-js");
 const os = require("os");
 
+const pathToLogFile = "./swarm-upload-result.txt";
+
 // Manually define some common MIME types for file extensions
 const mimeTypes = {
   txt: "text/plain",
@@ -131,7 +133,6 @@ async function fetchAndUploadToSwarm(
       );
       console.log(`\n#####\n`);
 
-
       if (isValidURL(urls[i].filePath)) {
         const fileName = `${urls[i].fileName}${getFileExtension(
           urls[i].filePath
@@ -159,14 +160,18 @@ async function fetchAndUploadToSwarm(
       setTimeout(() => {
         if (uploadResponse) {
           console.log(`\nFile uploaded successfully...\n`);
-          console.log(`Filename: ${urls[i].fileName}\nReferenceHash: ${
-            uploadResponse.reference
-          }\nAccess file: https://gateway.ethswarm.org/access/${
-            uploadResponse.reference
-          }\nTagUID: ${uploadResponse.tagUid}\nCID: ${uploadResponse.cid()}
-          `);
 
-          //
+          logToFile(
+            "",
+            `Filename: ${urls[i].fileName}\nReferenceHash: ${
+              uploadResponse.reference
+            }\nAccess file: https://gateway.ethswarm.org/access/${
+              uploadResponse.reference
+            }\nTagUID: ${uploadResponse.tagUid}\nCID: ${uploadResponse.cid()}
+            `
+          );
+
+          console.log(`\nReport logged to ${pathToLogFile}\n`);
           clearInterval(intervalId);
         }
       }, 3000);
@@ -275,7 +280,7 @@ async function downloadAndUpload(bee, postageBatchId, fileUrl, fileName, tag) {
     let uploadResp;
 
     if (bee && postageBatchId) {
-      console.log('filename: ', fileName)
+      console.log("filename: ", fileName);
       uploadResp = await bee.uploadFile(postageBatchId, readStream, fileName, {
         tag,
         // encrypt,
@@ -297,6 +302,17 @@ async function downloadAndUpload(bee, postageBatchId, fileUrl, fileName, tag) {
       err.response ? err.response.statusText : err.message
     );
   }
+}
+
+/**
+ * This function logs the report of a successful upload
+ * @param {string} filePath file path to save the output; default path = "./swarm-upload-result.txt"
+ * @param {string} content The content to be written
+ */
+function logToFile(filePath = pathToLogFile, content) {
+  fs.writeFileSync(filePath, content, {
+    encoding: "utf-8",
+  });
 }
 
 module.exports = {
