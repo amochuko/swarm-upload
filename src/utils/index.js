@@ -4,7 +4,7 @@ const axios = require("axios");
 const { Bee } = require("@ethersphere/bee-js");
 const os = require("os");
 
-const pathToLogFile = "./swarm-upload-result.txt";
+const pathToLogFile = `./swarm-upload-result-${new Date().toISOString()}.txt`;
 
 // Manually define some common MIME types for file extensions
 const mimeTypes = {
@@ -310,6 +310,7 @@ async function downloadAndUpload(bee, postageBatchId, fileUrl, fileName, tag) {
  * @param {string} content The content to be written
  */
 function logToFile(filePath = pathToLogFile, content) {
+ 
   fs.writeFileSync(filePath, content, {
     encoding: "utf-8",
   });
