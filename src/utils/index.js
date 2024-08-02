@@ -20,7 +20,7 @@ function getFileExtension(filePath) {
   return path.extname(filePath).toLowerCase();
 }
 
-/**
+/** Funtion to get the type of a file
  * @param {any} filePath The path to the file
  */
 function getFileType(filePath) {
@@ -73,12 +73,13 @@ function isValidURL(url) {
  * This function receives the file path / url and goes ahead
  * to get the file it links to
  * @param {*} filePath The location of the file
+ * @param {*} fileName The optional name of file
  * @returns file content
  */
 async function parsePathFlag(filePath, fileName) {
   // if path is a single url to a file
   if (isValidURL(filePath)) {
-    return [{ filePath, fileName }];
+    return [{ filePath }];
   }
 
   // Normalize FilePath if filePath is local (relative or absolute)
@@ -92,7 +93,7 @@ async function parsePathFlag(filePath, fileName) {
 
   // Check if file type is not `.txt`
   if (fileTypeIsNotDotTxt(normalizePath)) {
-    return [{ filePath, fileName }];
+    return [{ filePath }];
   }
 
   return fetchFile(normalizePath);
@@ -101,7 +102,7 @@ async function parsePathFlag(filePath, fileName) {
 /**
  * This function uses the urls given it to fetch the
  * pointed file and automatically upload to the Swarm Network
- * @param {string | any[]} urls The location of the file
+ * @param {string[] | any[]} urls The location of the file
  * @param {string} beenNodeURL The Bee Node url
  * @param {string} postageBatchId The postage stamp id
  * @param {boolean} trackProgress A boolean to enable tracking of upload state
@@ -110,91 +111,70 @@ async function fetchAndUploadToSwarm(
   urls,
   beenNodeURL,
   postageBatchId,
-  trackProgress = false
+  trackProgress
 ) {
   const bee = new Bee(beenNodeURL);
 
   // To hold generated `tag` that is need to keep track of upload status
   const tagArr = [];
-  let uploadResponse;
+  try {
+    // generate tag for which is meant for tracking progres of syncing data across network.
+    // if (trackProgress) {
+    //   const tag = await bee.createTag();
+    //   console.log("tag here: ", tag);
+    //   tagArr.push(tag);
+    // }
 
-  for (let i = 0; i < urls.length; i++) {
-    try {
-      // generate tag for which is meant for tracking progres of syncing data across network.
-      if (trackProgress) {
-        const tag = await bee.createTag();
-        console.log("tag here: ", tag);
-        tagArr.push(tag);
+    const uploadPromises = urls.map(async (url, i) => {
+      const trimmedUrl = url.trim();
+
+      if (!isValidURL(trimmedUrl)) {
+        throw new Error("Not a valid URL!");
       }
 
-      console.log(`\n#####\n`);
-      console.log(`\nDownload started from ${urls[i].filePath}...\n`);
       console.log(
-        `Using stamp batch ID ${postageBatchId} to upload file to Bee node at ${beenNodeURL}\n`
+        `\nProcessing started for file No. ${
+          urls.indexOf(trimmedUrl) + 1
+        } from ${trimmedUrl}`
       );
-      console.log(`\n#####\n`);
 
-      if (isValidURL(urls[i].filePath)) {
-        const fileName = `${urls[i].fileName}${getFileExtension(
-          urls[i].filePath
-        )}`;
+      // simulate a delay
+      await new Promise((res) => setTimeout(res, 1000));
 
-        uploadResponse = await downloadAndUpload(
-          bee,
-          postageBatchId,
-          urls[i].filePath,
-          fileName,
-          trackProgress ? tagArr[i].uid : undefined
+      const uploadResponse = await getFilesAndUpload(
+        bee,
+        postageBatchId,
+        trimmedUrl,
+        trackProgress ? tagArr[i].uid : undefined
+      );
+
+      return uploadResponse;
+    });
+
+    // awaiting Promise to resolve
+    const resolvedPromises = await Promise.all(uploadPromises);
+
+    // process resolvedPromises
+    resolvedPromises.forEach((res, i) => {
+      console.log(
+        `File uploaded successfully; logging result to file at ${logDirPath}/${pathToLogFile}\n`
+      );
+
+      if (res?.reference) {
+        logger(
+          pathToLogFile,
+          `Filename: ${getFileName(urls[i])}\nReferenceHash: ${
+            res.reference
+          }\nAccess file: https://gateway.ethswarm.org/access/${
+            res.reference
+          }\nTagUID: ${res.tagUid}\nCID: ${res.cid()}
+              `
         );
-      } else {
-        throw Error("Not a valid URL");
       }
-
-      const intervalId = setInterval(() => {
-        Array(2)
-          .fill("~")
-          .forEach((itm) => {
-            console.log(itm);
-          });
-      }, 1000);
-
-      setTimeout(() => {
-        if (uploadResponse) {
-          console.log(`\nFile uploaded successfully...\n`);
-          console.log(`cid: ${uploadResponse.cid}`);
-
-          logToFile(
-            pathToLogFile,
-            `Filename: ${urls[i].fileName}\nReferenceHash: ${
-              uploadResponse.reference
-            }\nAccess file: https://gateway.ethswarm.org/access/${
-              uploadResponse.reference
-            }\nTagUID: ${uploadResponse.tagUid}\nCID: ${uploadResponse.cid()}
-            `
-          );
-          console.log(`\nReport logged to ${logDirPath}/${pathToLogFile}\n`);
-
-          clearInterval(intervalId);
-        }
-      }, 3000);
-    } catch (err) {
-      console.error(`\nUpload to Swarm Network failed with: ${err}\n`);
-      throw err;
-    }
+    });
+  } catch (err) {
+    console.error(`\nUpload to Swarm Network failed: ${err}\n`);
   }
-}
-
-/**
- * Function that accepts an array of filePath and fileName in single line
- * If array contains more than one item; it split the line into
- * an object of {filePath:string, fileName:string}
- * @param {any[]} urlPaths
- */
-function splitPath(urlPaths) {
-  return urlPaths.map((path) => {
-    const [filePath, fileName] = path.split(" ");
-    return { filePath, fileName };
-  });
 }
 
 /**
@@ -204,58 +184,27 @@ function splitPath(urlPaths) {
 function fetchFile(filePath) {
   try {
     const fileContent = fs.readFileSync(filePath, { encoding: "utf-8" });
-    const lines = fileContent.trim().split(/\n/);
-
-    return splitPath(lines);
+    return fileContent.split(/\n/);
   } catch (err) {
     console.error(`Error reading file: ${err.message}`);
     throw err;
   }
 }
 
-/**
- * Function that encapsulate the `bee` upload
- * @param {Object} [bee] A active Bee node
- * @param {undefined} [stampBatchId] The stamp Id
- * @param {ArrayBuffer | any} [data] An ArrayBuffer
- * @param {undefined} [filePath] Path to a file
- * @param {undefined} [fileName] Name of the file
- * @param {undefined} [tag] A generated Bee tag that can be used to track upload progress
- */
-async function beeUploadFile(
-  bee,
-  stampBatchId,
-  data,
-  filePath,
-  fileName,
-  tag,
-  pinning = false
-) {
-  // @ts-ignore
-
-  console.log("stampBatchId: ", stampBatchId);
-  console.log("data: ", data);
-  console.log("filePath: ", filePath);
-  console.log("fileName: ", fileName);
-
-  return await bee.uploadFile(
-    stampBatchId,
-    data,
-    `${fileName}${getFileExtension(filePath)}`,
-    {},
-    { tag, pinning }
-  );
+function getFileName(url) {
+  return path.basename(decodeURIComponent(String(url)))
+    ? path.basename(decodeURIComponent(String(url))).split(".")[0]
+    : new Date().toISOString();
 }
 
 /**
  * Function that encapsulate the `bee` upload
  * @param {Bee} [bee] A active Bee node
  * @param {string | import("@ethersphere/bee-js").BatchId} [postageBatchId] The stamp Id
- * @param {string} [fileUrl] Path to a file
- * @param {string | undefined} [fileName] Name of the file
+ * @param {string} [url] Path to a file
  * @param {number | undefined} [tag] A generated Bee tag that can be used to track upload progress
  */
-async function downloadAndUpload(bee, postageBatchId, fileUrl, fileName, tag) {
+async function getFilesAndUpload(bee, postageBatchId, url, tag) {
   try {
     // Generate a unique temporary file name
     const tempFilePath = path.join(os.tmpdir(), `temp-${Date.now()}.${"ext"}`);
@@ -264,9 +213,17 @@ async function downloadAndUpload(bee, postageBatchId, fileUrl, fileName, tag) {
     // @ts-ignore
     const resp = await axios({
       method: "GET",
-      url: fileUrl,
+      url,
       responseType: "stream",
     });
+
+    const fileProps = {
+      contentType: resp.headers["content-type"],
+      extension: getFileExtension(url)
+        ? getFileExtension(url)
+        : `.${resp.headers["content-type"].split("/")[1]}`,
+      name: getFileName(url),
+    };
 
     // Save the file to the temporary location
     const writer = fs.createWriteStream(tempFilePath);
@@ -282,16 +239,20 @@ async function downloadAndUpload(bee, postageBatchId, fileUrl, fileName, tag) {
     let uploadResp;
 
     if (bee && postageBatchId) {
-      console.log("filename: ", fileName);
-      uploadResp = await bee.uploadFile(postageBatchId, readStream, fileName, {
-        tag,
-        // encrypt,
-        // deferred,
-        // contentType,
-        // pin,
-        // size,
-        // redundancyLevel
-      });
+      uploadResp = await bee.uploadFile(
+        postageBatchId,
+        readStream,
+        `${fileProps.name}${fileProps.extension}`
+        //     {
+        //       // tag,
+        //       // encrypt,
+        //       // deferred,
+        //       // contentType,
+        //       // pin,
+        //       // size,
+        //       // redundancyLevel
+        //     }
+      );
     }
 
     // clean up temporary filter:
@@ -299,10 +260,7 @@ async function downloadAndUpload(bee, postageBatchId, fileUrl, fileName, tag) {
 
     return uploadResp;
   } catch (err) {
-    console.error(
-      "Upload failed:",
-      err.response ? err.response.statusText : err.message
-    );
+    throw err;
   }
 }
 
@@ -311,7 +269,7 @@ async function downloadAndUpload(bee, postageBatchId, fileUrl, fileName, tag) {
  * @param {fs.PathOrFileDescriptor | undefined } filePath file path to save the output; default path = "./logs/swarm-upload-result-[timestamp].txt"
  * @param {string} content The content to be written
  */
-function logToFile(filePath = pathToLogFile, content) {
+function logger(filePath = pathToLogFile, content) {
   if (!fs.existsSync(logDirPath)) {
     fs.mkdir(logDirPath, {}, (err) => {
       if (err) {
@@ -331,11 +289,10 @@ function logToFile(filePath = pathToLogFile, content) {
  */
 function writeContentToFile(filePath, data) {
   try {
-    const fd = fs.openSync(filePath, "wa"); // Open the file for writing
+    const fd = fs.openSync(filePath, "w"); // Open the file for writing
     const buffer = Buffer.from(data); // Convert the data to a buffer
     fs.writeSync(fd, buffer, 0, buffer.length, null); // Write the buffer to the file
     fs.closeSync(fd); // Close the file descriptor
-    console.log("File written successfully");
   } catch (err) {
     console.error(`Error writing file: ${err}`);
     throw err;
@@ -347,6 +304,4 @@ module.exports = {
   parsePathFlag,
   fetchAndUploadToSwarm,
   fileTypeIsNotDotTxt,
-  logToFile,
-  pathToLogFile,
 };
