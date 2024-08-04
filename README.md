@@ -26,7 +26,6 @@ npm start
 
 ## Flag options
 
-
     Flags:
         --url                   A single URL or path to a file containing a list of URLs
         --bee-node-url          The URL of a Bee node to use 

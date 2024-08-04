@@ -1,7 +1,14 @@
 const path = require("path");
-const fs = require("fs");
-const axios = require("axios");
-const { Bee, BeeDebug } = require("@ethersphere/bee-js");
+const fs = require("fs").promises;
+const fsAsync = require("node:fs");
+
+const axios = require("axios").default;
+const { Bee } = require("@ethersphere/bee-js");
+const os = require("os");
+
+const baseDir = path.join(process.cwd(), "swarm_upload_logs");
+const pathToLogFile = (filename) =>
+  path.join(baseDir, `${filename}-${new Date().toISOString()}.txt`);
 
 // Manually define some common MIME types for file extensions
 const mimeTypes = {
@@ -11,33 +18,34 @@ const mimeTypes = {
 /**
  * Function to extract the extension of a file
  * @param {any} filePath The path to the file
+ * @return extension of file
  */
 function getFileExtension(filePath) {
   return path.extname(filePath).toLowerCase();
 }
 
 /**
- * @param {any} filePath The path to the file
+ * Funtion to get the type of a file
+ * @param {string} filePath The path to the file
+ * @returns string | unknown
  */
 function getFileType(filePath) {
-  // Check for and return file extionsion
   const ext = getFileExtension(filePath).split(".")[1];
   return mimeTypes[ext] || "unknown";
 }
 
-/** Function to ascertain a file extension is `.txt`
+/**
+ * Function to ascertain a file extension is `.txt`
  * @param {any} filePath
  * @returns bool
  */
 function fileTypeIsNotDotTxt(filePath) {
-  // Check file type
   const fileType = getFileType(filePath);
-
-  // Check if file type is `.txt`
   return fileType !== Object.values(mimeTypes)[0];
 }
 
 /**
+ *  This function normalizes filePath if filePath is local (relative or absolute)
  * @param {string} filePath Path to the file
  * @returns {string} The file path
  */
@@ -57,7 +65,7 @@ function normalizeFilePath(filePath) {
 
 /**
  * The function validates the URL
- * @param {*} url path to the file
+ * @param {string} url path to the file
  * @returns boolean
  */
 function isValidURL(url) {
@@ -68,145 +76,37 @@ function isValidURL(url) {
 /**
  * This function receives the file path / url and goes ahead
  * to get the file it links to
- * @param {*} filePath The location of the file
+ * @param {string} url The location of the file
  * @returns file content
  */
-async function parsePathFlag(filePath, fileName) {
+async function parsePathFlag(url) {
   // if path is a single url to a file
-  if (isValidURL(filePath)) {
-    return [{ filePath, fileName }];
+  if (isValidURL(url)) {
+    return [url];
   }
 
-  // Normalize FilePath if filePath is local (relative or absolute)
-  const normalizePath = normalizeFilePath(filePath);
+  const normalizePath = normalizeFilePath(url);
 
-  // Check if file exists
-  const fileExist = fs.existsSync(normalizePath);
-  if (!fileExist) {
+  const stats = await fs.stat(normalizePath);
+  if (!stats.isFile()) {
     throw new Error("File does not exist!");
   }
 
-  // Check if file type is not `.txt`
   if (fileTypeIsNotDotTxt(normalizePath)) {
-    return [{ filePath, fileName }];
+    return [url];
   }
 
   return fetchFile(normalizePath);
 }
 
 /**
- * This function uses the urls given it to fetch the
- * pointed file and automatically upload to the Swarm Network
- * @param {*} urls The location of the file
- * @param {*} beenNodeURL The Bee Node url
- * @param {*} stampBatchId The postage stamp id
- * @param {*} trackProgress A boolean to enable tracking of upload state
- */
-async function fetchAndUploadToSwarm(
-  urls,
-  beenNodeURL,
-  stampBatchId,
-  trackProgress = false
-) {
-  const bee = new Bee(beenNodeURL, {});
-
-  // To hold generated `tag` that is need to keep track of upload status
-  const tagArr = [];
-
-  for (let i = 0; i < urls.length; i++) {
-    try {
-      // generate tag for which is meant for tracking progres of syncing data across network.
-
-      if (trackProgress) {
-        const tag = await bee.createTag({});
-        tagArr.push(tag);
-      }
-
-      console.log(`\n#####\n`);
-      console.log(`\nDownload started from ${urls[i].filePath}...\n`);
-      console.log(
-        `Using stamp batch ID ${stampBatchId} to upload file to Bee node at ${beenNodeURL}\n`
-      );
-      console.log(`\n#####\n`);
-
-      let uploadResponse;
-
-      if (isValidURL(urls[i].filePath)) {
-        // @ts-ignore
-        const res = await axios.get(urls[i].filePath, {
-          responseType: "arraybuffer",
-        });
-
-        uploadResponse = await beeUpload(
-          bee,
-          stampBatchId,
-          res.data,
-          urls[i].filePath,
-          urls[i].fileName,
-          trackProgress && tagArr[i].uid
-        );
-      } else {
-        const data = fs.readFileSync(urls[i].filePath);
-        uploadResponse = await beeUpload(
-          bee,
-          stampBatchId,
-          data,
-          urls[i].filePath,
-          urls[i].fileName,
-          trackProgress && tagArr[i].uid
-        );
-      }
-
-      const intervalId = setInterval(() => {
-        Array(2)
-          .fill("~")
-          .forEach((itm) => {
-            console.log(itm);
-          });
-      }, 1000);
-
-      setTimeout(() => {
-        if (uploadResponse.reference) {
-          console.log(`\nFile uploaded successfully...\n`);
-          console.log(`Filename: ${urls[i].fileName}\nReferenceHash: ${
-            uploadResponse.reference
-          }\nAccess file: https://gateway.ethswarm.org/access/${
-            uploadResponse.reference
-          }\nTagUID: ${uploadResponse.tagUid}\nCID: ${uploadResponse.cid()}
-                    `);
-          clearInterval(intervalId);
-        }
-      }, 3000);
-    } catch (err) {
-      console.error(`\nUpload to Swarm Network failed with: ${err}\n`);
-      throw err;
-    }
-  }
-}
-
-/**
- * Function that accepts an array of filePath and fileName in single line
- * If array contains more than one item; it split the line into
- * an object of {filePath:string, fileName:string}
- * @param {any[]} urlPaths
- */
-function splitPath(urlPaths) {
-  return urlPaths.map((path) => {
-    const [filePath, fileName] = path.split(" ");
-    return { filePath, fileName };
-  });
-}
-
-/**
  * This function fetches the file
  * @param {*} filePath The location of the file
  */
-function fetchFile(filePath) {
+async function fetchFile(filePath) {
   try {
-    const fileContent = fs.readFileSync(filePath, { encoding: "utf-8" });
-    const lines = fileContent.trim().split(/\n/);
-
-    return splitPath(lines);
+    const fileContent = await fs.readFile(filePath, { encoding: "utf-8" });
+    return fileContent.split(/\n/);
   } catch (err) {
     console.error(`Error reading file: ${err.message}`);
     throw err;
@@ -214,31 +114,271 @@ function fetchFile(filePath) {
 }
 
 /**
- * Function that encapsulate the `bee` upload
- * @param {Object} [bee] A active Bee node
- * @param {undefined} [stampBatchId] The stamp Id
- * @param {ArrayBuffer | any} [data] An ArrayBuffer
- * @param {undefined} [filePath] Path to a file
- * @param {undefined} [fileName] Name of the file
- * @param {undefined} [tag] A generated Bee tag that can be used to track upload progress
+ * Get filename from a valid URL, or generates one
+ * @param {string} url The url to file
+ * @returns
  */
-async function beeUpload(
-  bee,
-  stampBatchId,
-  data,
-  filePath,
-  fileName,
-  tag,
-  pinning = false
-) {
-  // @ts-ignore
-  return await bee.uploadFile(
-    stampBatchId,
-    Buffer.from(data),
-    `${fileName}${getFileExtension(filePath)}`,
-    {},
-    { tag, pinning }
-  );
+function getFileName(url) {
+  return path.basename(decodeURIComponent(url))
+    ? path.basename(decodeURIComponent(url)).split(".")[0]
+    : new Date().toISOString();
+}
+
+/**
+ * This function uses the urls given it to fetch the pointed file
+ * and automatically upload to the Swarm Network
+ *
+ * @param {Object} argsObj - The argument object
+ * @param {string} argsObj.beeNodeURL - The Bee Node url
+ * @param {string} argsObj.postageBatchId - The stamp Id
+ * @param {string[]} argsObj.urls - The location of the file
+ * @param {boolean} argsObj.size [size] - Specifies Content-Length for the given data. Optional.
+ * @param {boolean} argsObj.pin [pin] - Use to pin the data locally in the Bee node as well. Optional.
+ * @param {boolean} argsObj.contentType [contentType] - Specifies given Content-Type so when loaded in browser the file is correctly represented. Optional.
+ * @param {boolean} argsObj.encrypt [encrypt]  - Encrypts the uploaded data and return longer hash which also includes the decryption key. Optional.
+ * @param {boolean} argsObj.deferred [deferred]  - Determines if the uploaded data should be sent to the network immediately. Optional.
+ * @param {number} argsObj.redundancyLevel [redundancyLevel] -  The level of preserving data
+ */
+
+async function fetchAndUploadToSwarm({
+  urls,
+  beeNodeURL,
+  postageBatchId,
+  size,
+  pin,
+  contentType,
+  redundancyLevel,
+  encrypt,
+  deferred,
+}) {
+  try {
+    const res = await getFilesAndUpload({
+      urls,
+      beeNodeURL,
+      postageBatchId,
+      size,
+      contentType,
+      redundancyLevel,
+      pin,
+      encrypt,
+      deferred,
+    });
+
+    res.forEach((r, i) => {
+      logger(
+        pathToLogFile(getFileName(urls[i])),
+        `Filename: ${getFileName(urls[i])}\nReferenceHash: ${
+          r.reference
+        }\nAccess file: https://gateway.ethswarm.org/access/${
+          r.reference
+        }\nTagUID: ${r.tagUid}\nCID: ${r.cid()}
+                `
+      );
+
+      console.log(
+        "\n========================================================="
+      );
+      console.log(
+        `\nFilename: ${getFileName(urls[i])}\nReferenceHash: ${
+          r.reference
+        }\nAccess file: https://gateway.ethswarm.org/access/${
+          r.reference
+        }\nTagUID: ${r.tagUid}\nCID: ${r.cid()}
+                `
+      );
+    });
+  } catch (err) {
+    console.error(`\nUpload to Swarm Network failed: ${err}\n`);
+  }
+}
+
+/**
+ * Function that encapsulate the `bee` upload
+ * @param {Object} argsObj - The argument object
+ * @param {string} argsObj.beeNodeURL - The Bee Node url
+ * @param {string | import("@ethersphere/bee-js").BatchId} argsObj.postageBatchId  - The stamp Id
+ * @param {string[]} argsObj.urls urls The location of the file
+ * @param {boolean} argsObj.size [size] Specifies Content-Length for the given data. Optional.
+ * @param {boolean} argsObj.pin [pin]  Use to pin the data locally in the Bee node as well. Optional.
+ * @param {boolean} argsObj.contentType [contentType] Specifies given Content-Type so when loaded in browser the file is correctly represented. Optional.
+ * @param {boolean}argsObj.encrypt [encrypt] Encrypts the uploaded data and return longer hash which also includes the decryption key. Optional.
+ * @param {boolean}argsObj.deferred [deferred] Determines if the uploaded data should be sent to the network immediately. Optional.
+ * @param {number} argsObj.redundancyLevel [redundancyLevel] The level of preserving data
+ */
+async function getFilesAndUpload(argsObj) {
+  const bee = new Bee(argsObj.beeNodeURL);
+
+  const uploadOptions = getUploadOptions(argsObj);
+
+  try {
+    const taskA = argsObj.urls.map(async (url, i) => {
+      url = url.trim();
+      if (!isValidURL(url)) {
+        throw new Error(`Not a valid URL! -> ${url}`);
+      }
+
+      console.log(`Fetching file No. ${i + 1} from ${url}`);
+      const resp = await axios.get(url, { responseType: "stream" });
+
+      if (resp.status != 200) {
+        throw new Error(`Failed to download file No. ${i + 1} from ${url}`);
+      }
+
+      const fileProps = {
+        size: parseInt(resp.headers["content-length"], 10),
+        extension:
+          getFileExtension(url) ||
+          `.${resp.headers["content-type"].split("/")[1]}`,
+        name: getFileName(String(url)),
+        contentType: resp.headers["content-type"],
+      };
+
+      let downloadedBytes = 0;
+      let percentageComplete = 0;
+
+      // Listen to the 'data' event to receive chunks of data
+      resp.data.on("data", (chunk) => {
+        // Update the number of bytes downloaded
+        downloadedBytes += chunk.length;
+
+        // Calculate the percentage of the download that's complete
+        percentageComplete = Math.round(
+          (downloadedBytes / fileProps.size) * 100
+        );
+
+        // Log the progress to stdout
+        console.log(
+          `Download progress for file No. ${i + 1}: ${percentageComplete}%`
+        );
+
+        if (percentageComplete === 100) {
+          console.log(`\nPiping data to stream...\n`);
+        }
+      });
+
+      resp.data.on("error", (err) => {
+        console.error("Error downloading file: ", err);
+      });
+
+      const tempFilePath = path.join(
+        os.tmpdir(),
+        `temp-${fileProps.name}-${Date.now()}${fileProps.extension}`
+      );
+      if (tempFilePath)
+        console.log(`Created temporary file at ${tempFilePath}\n`);
+
+      // save data to temporary location
+      const writer = fsAsync.createWriteStream(tempFilePath);
+      resp.data.pipe(writer);
+
+      await new Promise((res, rej) => {
+        writer.on("finish", res);
+        writer.on("error", rej);
+      });
+
+      const readStream = fsAsync.createReadStream(tempFilePath);
+
+      return { fileProps, tempFilePath, readStream };
+    });
+
+    const taskAResponse = await Promise.all(taskA);
+
+    const uploadResults = taskAResponse.map(async (t, i) => {
+      const filename = `${t.fileProps.name}${t.fileProps.extension}`;
+
+      // update UploadOptions
+      const uploadOpts = {};
+      for (let key in uploadOptions) {
+        if (uploadOptions[key]) {
+          uploadOpts[key] = uploadOptions[key];
+        }
+        if (uploadOptions[key] && key == "size") {
+          uploadOpts[key] = t.fileProps.size;
+        }
+        if (uploadOptions[key] && key == "contentType") {
+          uploadOpts[key] = t.fileProps.contentType;
+        }
+        if (uploadOptions[key] && key == "redundancyLevel") {
+          uploadOpts[key] = uploadOptions[key];
+        }
+      }
+
+      console.log(`Uploading stream No. ${i + 1} to Swarm Node...\n`);
+
+      const uploadResp = await bee.uploadFile(
+        argsObj.postageBatchId,
+        t.readStream,
+        filename,
+        {
+          ...uploadOpts,
+        }
+      );
+
+      if (uploadResp.reference) {
+        console.log(`Cleaning up temporary file at ${t.tempFilePath}...\n`);
+        await fs.unlink(t.tempFilePath);
+      }
+
+      return uploadResp;
+    });
+
+    // Execute all tasks in parallel and wait for all of them to complete
+    const results = await Promise.all(uploadResults);
+
+    return results; // Return an array of results from all uploads
+  } catch (err) {
+    console.error(err);
+    throw err;
+  }
+}
+
+function getUploadOptions(args) {
+  const opts = {};
+
+  for (let key in args) {
+    if (
+      args[key] != undefined &&
+      key !== "postageBatchId" &&
+      key !== "beeNodeURL" &&
+      key !== "bee" &&
+      key !== "urls"
+    ) {
+      opts[key] = args[key];
+    }
+  }
+
+  return opts;
+}
+
+/**
+ * This function logs the report of a successful upload
+ * @param {string} filePath file path to save the output; default path = {pathToLogFile}
+ * @param {string} content The content to be written
+ */
+async function logger(filePath, content) {
+  try {
+    if (!fsAsync.existsSync(baseDir)) {
+      fsAsync.mkdir(baseDir, { recursive: true }, (err) => {});
+    }
+
+    await writeContentToFile(filePath, content);
+    console.log(`Log written successfully to ${filePath}\n`);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+/**
+ * Function that writes to file
+ * @param {string | fs.FileHandle} filePath path to the file
+ * @param {string} data The content to be written
+ */
+async function writeContentToFile(filePath, data) {
+  try {
+    await fs.writeFile(filePath, data);
+  } catch (err) {
+    throw err;
+  }
 }
 
 module.exports = {

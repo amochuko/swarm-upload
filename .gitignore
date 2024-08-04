@@ -1,5 +1,9 @@
-node_modules
+node_modules/
 .env*.local
 .env
 
 DS_Store
+
+logs/
+
+swarm_upload_logs/

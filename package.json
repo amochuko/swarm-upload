@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "description": "CLI app for streaming upload to Swarm",
   "main": "src/index.js",
-  
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node ./src/index.js"
+    "start": "node ./src/index.js",
+    "profile": "node --prof ./src/index.js"
   },
   "author": "ochuko awhe",
   "license": "MIT",
@@ -22,7 +22,7 @@
   },
   "homepage": "https://github.com/amochuko/swarm-upload",
   "dependencies": {
-    "@ethersphere/bee-js": "^6.7.4",
-    "axios": "^1.6.8"
+    "@ethersphere/bee-js": "^7.1.0",
+    "axios": "^1.7.2"
   }
 }
