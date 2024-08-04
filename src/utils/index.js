@@ -5,15 +5,10 @@ const fsAsync = require("node:fs");
 const axios = require("axios").default;
 const { Bee } = require("@ethersphere/bee-js");
 const os = require("os");
-const { Transform } = require("stream");
 
-//
-const logDir = "logs";
-const pathToLogFile = path.join(
-  process.cwd(),
-  logDir,
-  `swarm-upload-log-${new Date().toISOString()}.txt`
-);
+const baseDir = path.join(process.cwd(), "swarm_upload_logs");
+const pathToLogFile = (filename) =>
+  path.join(baseDir, `${filename}-${new Date().toISOString()}.txt`);
 
 // Manually define some common MIME types for file extensions
 const mimeTypes = {
@@ -169,30 +164,32 @@ async function fetchAndUploadToSwarm({
       deferred,
     });
 
-    // res.forEach((r, i) => {
-    //   logger(
-    //     pathToLogFile,
-    //     `Filename: ${getFileName(urls[i])}\nReferenceHash: ${
-    //       r.reference
-    //     }\nAccess file: https://gateway.ethswarm.org/access/${
-    //       r.reference
-    //     }\nTagUID: ${r.tagUid}\nCID: ${r.cid()}
-    //             `
-    //   );
-    // });
+    res.forEach((r, i) => {
+      logger(
+        pathToLogFile(getFileName(urls[i])),
+        `Filename: ${getFileName(urls[i])}\nReferenceHash: ${
+          r.reference
+        }\nAccess file: https://gateway.ethswarm.org/access/${
+          r.reference
+        }\nTagUID: ${r.tagUid}\nCID: ${r.cid()}
+                `
+      );
+
+      console.log(
+        "\n========================================================="
+      );
+      console.log(
+        `\nFilename: ${getFileName(urls[i])}\nReferenceHash: ${
+          r.reference
+        }\nAccess file: https://gateway.ethswarm.org/access/${
+          r.reference
+        }\nTagUID: ${r.tagUid}\nCID: ${r.cid()}
+                `
+      );
+    });
   } catch (err) {
     console.error(`\nUpload to Swarm Network failed: ${err}\n`);
   }
-}
-
-function showDownloadProgress(chunk, fileSize) {
-  let downloadBytes = 0;
-
-  downloadBytes += chunk.length;
-
-  const percentComplete = Math.round((downloadBytes / fileSize) * 100);
-
-  console.log(`Download progress: ${percentComplete}%`);
 }
 
 /**
@@ -250,7 +247,13 @@ async function getFilesAndUpload(argsObj) {
         );
 
         // Log the progress to stdout
-        console.log(`Download progress: ${percentageComplete}%`);
+        console.log(
+          `Download progress for file No. ${i + 1}: ${percentageComplete}%`
+        );
+
+        if (percentageComplete === 100) {
+          console.log(`\nPiping data to stream...\n`);
+        }
       });
 
       resp.data.on("error", (err) => {
@@ -266,7 +269,6 @@ async function getFilesAndUpload(argsObj) {
 
       // save data to temporary location
       const writer = fsAsync.createWriteStream(tempFilePath);
-      console.log(`Piping data No. ${i + 1} to stream...`);
       resp.data.pipe(writer);
 
       await new Promise((res, rej) => {
@@ -284,8 +286,8 @@ async function getFilesAndUpload(argsObj) {
     const uploadResults = taskAResponse.map(async (t, i) => {
       const filename = `${t.fileProps.name}${t.fileProps.extension}`;
 
+      // update UploadOptions
       const uploadOpts = {};
-
       for (let key in uploadOptions) {
         if (uploadOptions[key]) {
           uploadOpts[key] = uploadOptions[key];
@@ -301,20 +303,21 @@ async function getFilesAndUpload(argsObj) {
         }
       }
 
-      console.log(`Uploading stream No. ${i + 1}...\n`);
-      let uploadResp;
+      console.log(`Uploading stream No. ${i + 1} to Swarm Node...\n`);
 
-      // const uploadResp = await bee.uploadFile(
-      //   argsObj.postageBatchId,
-      //   t.readStream,
-      //   filename,
-      // {}
-      // );
+      const uploadResp = await bee.uploadFile(
+        argsObj.postageBatchId,
+        t.readStream,
+        filename,
+        {
+          ...uploadOpts,
+        }
+      );
 
-      // if (uploadResp.reference) {
-      //   console.log(`Cleaning up temporary file at ${t.tempFilePath}...\n`);
-      //   await fs.unlink(t.tempFilePath);
-      // }
+      if (uploadResp.reference) {
+        console.log(`Cleaning up temporary file at ${t.tempFilePath}...\n`);
+        await fs.unlink(t.tempFilePath);
+      }
 
       return uploadResp;
     });
@@ -352,20 +355,16 @@ function getUploadOptions(args) {
  * @param {string} filePath file path to save the output; default path = {pathToLogFile}
  * @param {string} content The content to be written
  */
-async function logger(filePath = pathToLogFile, content) {
+async function logger(filePath, content) {
   try {
-    // TODO: Review with Async options
-    const stats = await fs.stat(logDir);
-
-    if (!stats.isDirectory()) {
-      await fs.mkdir(logDir, { recursive: true });
+    if (!fsAsync.existsSync(baseDir)) {
+      fsAsync.mkdir(baseDir, { recursive: true }, (err) => {});
     }
 
-    await writeContentToFile(pathToLogFile, content);
-    console.log(`Log written successfully to ${pathToLogFile}\n`);
+    await writeContentToFile(filePath, content);
+    console.log(`Log written successfully to ${filePath}\n`);
   } catch (err) {
-    console.log(`Failed to write log: ${err.message}\n`);
-    throw err;
+    console.error(err);
   }
 }
 
