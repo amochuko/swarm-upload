@@ -1,12 +1,19 @@
 const path = require("path");
-const fs = require("fs");
+const fs = require("fs").promises;
+const fsAsync = require("node:fs");
+
 const axios = require("axios").default;
 const { Bee } = require("@ethersphere/bee-js");
 const os = require("os");
+const { Transform } = require("stream");
 
 //
-const logDirPath = process.cwd() + "/logs";
-const pathToLogFile = `swarm-upload-log-${new Date().toISOString()}.txt`;
+const logDir = "logs";
+const pathToLogFile = path.join(
+  process.cwd(),
+  logDir,
+  `swarm-upload-log-${new Date().toISOString()}.txt`
+);
 
 // Manually define some common MIME types for file extensions
 const mimeTypes = {
@@ -85,8 +92,8 @@ async function parsePathFlag(filePath) {
 
   const normalizePath = normalizeFilePath(filePath);
 
-  const fileExist = fs.existsSync(normalizePath);
-  if (!fileExist) {
+  const stats = await fs.stat(normalizePath);
+  if (!stats.isFile()) {
     throw new Error("File does not exist!");
   }
 
@@ -101,9 +108,9 @@ async function parsePathFlag(filePath) {
  * This function fetches the file
  * @param {*} filePath The location of the file
  */
-function fetchFile(filePath) {
+async function fetchFile(filePath) {
   try {
-    const fileContent = fs.readFileSync(filePath, { encoding: "utf-8" });
+    const fileContent = await fs.readFile(filePath, { encoding: "utf-8" });
     return fileContent.split(/\n/);
   } catch (err) {
     console.error(`Error reading file: ${err.message}`);
@@ -178,6 +185,7 @@ async function fetchAndUploadToSwarm(
   }
 }
 
+
 /**
  * Function that encapsulate the `bee` upload
  * @param {Bee} bee A active Bee node
@@ -214,7 +222,7 @@ async function getFilesAndUpload(
       if (resp.status != 200) {
         throw new Error(`Failed to download file No. ${i + 1} from ${url}`);
       }
-
+      
       const fileProps = {
         size: parseInt(resp.headers["content-length"], 10),
         extension:
@@ -231,9 +239,9 @@ async function getFilesAndUpload(
       if (tempFilePath)
         console.log(`Created temporary file at ${tempFilePath}\n`);
 
-      console.log(`Creating stream No. ${i + 1}...`);
       // save data to temporary location
-      let writer = fs.createWriteStream(tempFilePath);
+      let writer = fsAsync.createWriteStream(tempFilePath);
+      console.log(`Piping data No. ${i + 1} to stream...`);
       resp.data.pipe(writer);
 
       await new Promise((res, rej) => {
@@ -241,13 +249,24 @@ async function getFilesAndUpload(
         writer.on("error", rej);
       });
 
-      const readStream = fs.createReadStream(tempFilePath);
+      let readStream = fsAsync.createReadStream(tempFilePath);
+
       return { fileProps, tempFilePath, readStream };
     });
 
     const taskAResponse = await Promise.all(taskA);
+
     const uploadResults = taskAResponse.map(async (t, i) => {
       const filename = `${t.fileProps.name}${t.fileProps.extension}`;
+
+      console.log(`
+            size: ${size ? t.fileProps.size : undefined},
+            contentType: ${contentType && t.fileProps.contentType},
+            encrypt: ${encrypt},
+            pin: ${pin},
+            redundancyLevel: ${redundancyLevel},
+            deferred: ${deferred}
+          `);
 
       console.log(`Uploading stream No. ${i + 1}...\n`);
       let uploadResp = await bee.uploadFile(
@@ -265,8 +284,8 @@ async function getFilesAndUpload(
       );
 
       if (uploadResp.reference) {
-        console.log("Cleaning up temporary file...\n");
-        fs.unlinkSync(t.tempFilePath);
+        console.log(`Cleaning up temporary file at ${t.tempFilePath}...\n`);
+        await fs.unlink(t.tempFilePath);
       }
 
       return uploadResp;
@@ -284,37 +303,35 @@ async function getFilesAndUpload(
 
 /**
  * This function logs the report of a successful upload
- * @param {fs.PathOrFileDescriptor} filePath file path to save the output; default path = {pathToLogFile}
+ * @param {string} filePath file path to save the output; default path = {pathToLogFile}
  * @param {string} content The content to be written
  */
-function logger(filePath = pathToLogFile, content) {
-  // TODO: Review with Async options
-  if (!fs.existsSync(logDirPath)) {
-    fs.mkdir(logDirPath, {}, (err) => {
-      if (err) {
-        throw Error(err.message);
-      }
+async function logger(filePath = pathToLogFile, content) {
+  try {
+    // TODO: Review with Async options
+    const stats = await fs.stat(logDir);
 
-      writeContentToFile(process.cwd() + "/logs/" + pathToLogFile, content);
-    });
-  } else {
-    writeContentToFile(process.cwd() + "/logs/" + pathToLogFile, content);
+    if (!stats.isDirectory()) {
+      await fs.mkdir(logDir, { recursive: true });
+    }
+
+    await writeContentToFile(pathToLogFile, content);
+    console.log(`Log written successfully to ${pathToLogFile}\n`);
+  } catch (err) {
+    console.log(`Failed to write log: ${err.message}\n`);
+    throw err;
   }
 }
 
 /**
  * Function that writes to file
- * @param {string | fs.PathLike} filePath path to the file
+ * @param {string | fs.FileHandle} filePath path to the file
  * @param {string} data The content to be written
  */
-function writeContentToFile(filePath, data) {
+async function writeContentToFile(filePath, data) {
   try {
-    const fd = fs.openSync(filePath, "w"); // Open the file for writing
-    const buffer = Buffer.from(data); // Convert the data to a buffer
-    fs.writeSync(fd, buffer, 0, buffer.length, null); // Write the buffer to the file
-    fs.closeSync(fd); // Close the file descriptor
+    await fs.writeFile(filePath, data);
   } catch (err) {
-    console.error(`Error writing file: ${err}`);
     throw err;
   }
 }
