@@ -3,7 +3,7 @@ const {
   fetchAndUploadToSwarm,
   isValidURL,
   fileTypeIsNotDotTxt,
-} = require("./utils");
+} = require("../utils");
 
 const args = process.argv.slice(2);
 
@@ -34,7 +34,7 @@ async function main() {
 
   Usage:
 
-    npm start -- --file-path <replace-with-your-file-path | url-to-file | filepath-containing-list-of-url(s)> --filename <replace-with-your-filename> --bee-node-url <replace-with-your-bee-node-url> --stamp-batch-id <replace-with-your-stamp-batch-id> 
+    swarm-upload --file-path <replace-with-your-file-path | url-to-file | filepath-containing-list-of-url(s)> --filename <replace-with-your-filename> --bee-node-url <replace-with-your-bee-node-url> --stamp-batch-id <replace-with-your-stamp-batch-id> 
 `);
   }
 

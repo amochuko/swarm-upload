@@ -15,23 +15,35 @@ An example of such a file titled [`sample-urls.txt`](./sample-urls.txt) can be f
 ### Install dependencies
 
 ```bash
-npm install
+npm install --global .
 ```
 
 ### Start the CLI App
 
 ```bash
-npm start
+swarm-upload
 ```
 
 ## Flag options
 
     Flags:
+
         --url                   A single URL or path to a file containing a list of URLs
         --bee-node-url          The URL of a Bee node to use 
-        --stamp-batch-id        The ID of the stamp batch to use on the Bee nod
+        --stamp-batch-id        The ID of the stamp batch to use on the Bee node
+
+    
+    Optionals
+ 
+    --encrypt                  Encrypts the uploaded data and return longer hash which also includes the decryption key (eg. --encrypt true)
+    --deferred                 Determines if the uploaded data should be sent to the network immediately (eq. --deferred false) or in a deferred fashion (eq. --deferred true)
+    --content-type             Specifies given Content-Type so when loaded in browser the file is correctly represented (eg. --content-type true)
+    --pin                      Use to pin the data locally in the Bee node as well (eg. --pin true)
+    --size                     Specifies Content-Length for the given data. It is required when uploading with Readable (eg. --size true)
+    --redundancy-level         It use to ensure the retrieval of data chunk against any level of data loss 
+                               (eq. --redundancy-level 1) The value (number) ranges from 0 - 4. NB: The higher the number, the higher the cost that follows it.
     
 
     Example usage:
      
-    swarm-upload  --file-path <replace-with-your-file-path | url-to-file | filepath-containing-list-of-url(s)> --filename <replace-with-your-filename> --bee-node-url <replace-with-your-bee-node-urll> --stamp-batch-id <replace-with-your-stamp-batch-id>
+    swarm-upload  --file-path <replace-with-your-file-path | url-to-file | filepath-containing-list-of-url(s)> --bee-node-url <replace-with-your-bee-node-urll> --stamp-batch-id <replace-with-your-stamp-batch-id>
