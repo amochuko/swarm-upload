@@ -45,5 +45,18 @@ swarm-upload
     
 
     Example usage:
-     
+
+    (When installed)
+
     swarm-upload  --file-path <replace-with-your-file-path | url-to-file | filepath-containing-list-of-url(s)> --bee-node-url <replace-with-your-bee-node-urll> --stamp-batch-id <replace-with-your-stamp-batch-id>
+
+
+    (Not yet installed and in project directory)
+
+    NB: Using accompanying sample-urls.txt with a Bee node running locally (but should work with remote Bee node)
+    
+    1. Supplying path to a text file containing list of file url(s) 
+        npm start -- --bee-node-url http://127.0.0.1:1633 --stamp-batch-id a7fff0a82cffd30cc613bc6d569c6344f719cd603a8a04d0aa4c4c621bac775e --file-path ./sample-urls.txt
+    
+    2. Supplying path to a specific file
+        npm start -- --bee-node-url http://127.0.0.1:1633 --stamp-batch-id a7fff0a82cffd30cc613bc6d569c6344f719cd603a8a04d0aa4c4c621bac775e --file-path https://raw.githubusercontent.com/amochuko/zcash-poster-design/main/ywallet_sweep_compressed.mp4
