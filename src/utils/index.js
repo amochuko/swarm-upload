@@ -79,7 +79,7 @@ function isValidURL(url) {
  * @param {string} url The location of the file
  * @returns file content
  */
-async function parsePathFlag(url) {
+async function parseFilePath(url) {
   // if path is a single url to a file
   if (isValidURL(url)) {
     return [url];
@@ -106,7 +106,10 @@ async function parsePathFlag(url) {
 async function fetchFile(filePath) {
   try {
     const fileContent = await fs.readFile(filePath, { encoding: "utf-8" });
-    return fileContent.split(/\n/);
+    return fileContent
+      .split(/\n/)
+      .map((ln) => ln.trim())
+      .filter((ln) => ln !== "");
   } catch (err) {
     console.error(`Error reading file: ${err.message}`);
     throw err;
@@ -188,7 +191,7 @@ async function fetchAndUploadToSwarm({
       );
     });
   } catch (err) {
-    console.error(`\nUpload to Swarm Network failed: ${err}\n`);
+    console.error(`\nProcessing failed with ${err}\n`);
   }
 }
 
@@ -212,7 +215,6 @@ async function getFilesAndUpload(argsObj) {
 
   try {
     const taskA = argsObj.urls.map(async (url, i) => {
-      url = url.trim();
       if (!isValidURL(url)) {
         throw new Error(`Not a valid URL! -> ${url}`);
       }
@@ -383,7 +385,7 @@ async function writeContentToFile(filePath, data) {
 
 module.exports = {
   isValidURL,
-  parsePathFlag,
+  parseFilePath,
   fetchAndUploadToSwarm,
   fileTypeIsNotDotTxt,
 };
