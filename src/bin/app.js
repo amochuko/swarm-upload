@@ -1,5 +1,5 @@
 const {
-  parsePathFlag,
+  parseFilePath,
   fetchAndUploadToSwarm,
   isValidURL,
   fileTypeIsNotDotTxt,
@@ -34,7 +34,7 @@ async function main() {
 
   Usage:
 
-    swarm-upload --file-path <replace-with-your-file-path | url-to-file | filepath-containing-list-of-url(s)> --filename <replace-with-your-filename> --bee-node-url <replace-with-your-bee-node-url> --stamp-batch-id <replace-with-your-stamp-batch-id> 
+    swarm-upload --file-path <replace-with-your-file-path | url-to-file | file-path-containing-list-of-url(s)> --bee-node-url <replace-with-your-bee-node-url> --stamp-batch-id <replace-with-your-stamp-batch-id> 
 `);
   }
 
@@ -95,7 +95,7 @@ async function main() {
   }
 
   try {
-    const urls = await parsePathFlag(filePath);
+    const urls = await parseFilePath(filePath);
 
     await fetchAndUploadToSwarm({
       beeNodeURL,

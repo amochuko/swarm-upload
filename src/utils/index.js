@@ -79,7 +79,7 @@ function isValidURL(url) {
  * @param {string} url The location of the file
  * @returns file content
  */
-async function parsePathFlag(url) {
+async function parseFilePath(url) {
   // if path is a single url to a file
   if (isValidURL(url)) {
     return [url];
@@ -106,7 +106,10 @@ async function parsePathFlag(url) {
 async function fetchFile(filePath) {
   try {
     const fileContent = await fs.readFile(filePath, { encoding: "utf-8" });
-    return fileContent.split(/\n/);
+    return fileContent
+      .split(/\n/)
+      .map((ln) => ln.trim())
+      .filter((ln) => ln !== "");
   } catch (err) {
     console.error(`Error reading file: ${err.message}`);
     throw err;
@@ -164,6 +167,7 @@ async function fetchAndUploadToSwarm({
       deferred,
     });
 
+    console.log("\nUpload was successful. Logging result: \n");
     res.forEach((r, i) => {
       logger(
         pathToLogFile(getFileName(urls[i])),
@@ -172,11 +176,14 @@ async function fetchAndUploadToSwarm({
         }\nAccess file: https://gateway.ethswarm.org/access/${
           r.reference
         }\nTagUID: ${r.tagUid}\nCID: ${r.cid()}
-                `
+                `,
+        i + 1
       );
 
       console.log(
-        "\n========================================================="
+        `\n============================== File ${
+          i + 1
+        } ==============================`
       );
       console.log(
         `\nFilename: ${getFileName(urls[i])}\nReferenceHash: ${
@@ -188,7 +195,7 @@ async function fetchAndUploadToSwarm({
       );
     });
   } catch (err) {
-    console.error(`\nUpload to Swarm Network failed: ${err}\n`);
+    console.error(`\nProcessing failed with ${err}\n`);
   }
 }
 
@@ -212,12 +219,11 @@ async function getFilesAndUpload(argsObj) {
 
   try {
     const taskA = argsObj.urls.map(async (url, i) => {
-      url = url.trim();
       if (!isValidURL(url)) {
         throw new Error(`Not a valid URL! -> ${url}`);
       }
 
-      console.log(`Fetching file No. ${i + 1} from ${url}`);
+      console.log(`Fetching file No. ${i + 1} from ${url}\n`);
       const resp = await axios.get(url, { responseType: "stream" });
 
       if (resp.status != 200) {
@@ -265,7 +271,7 @@ async function getFilesAndUpload(argsObj) {
         `temp-${fileProps.name}-${Date.now()}${fileProps.extension}`
       );
       if (tempFilePath)
-        console.log(`Created temporary file at ${tempFilePath}\n`);
+        console.log(`Created temporary file ${i + 1} at ${tempFilePath}\n`);
 
       // save data to temporary location
       const writer = fsAsync.createWriteStream(tempFilePath);
@@ -303,7 +309,7 @@ async function getFilesAndUpload(argsObj) {
         }
       }
 
-      console.log(`Uploading stream No. ${i + 1} to Swarm Node...\n`);
+      console.log(`Uploading stream No. ${i + 1} to Swarm Node...`);
 
       const uploadResp = await bee.uploadFile(
         argsObj.postageBatchId,
@@ -315,7 +321,9 @@ async function getFilesAndUpload(argsObj) {
       );
 
       if (uploadResp.reference) {
-        console.log(`Cleaning up temporary file at ${t.tempFilePath}...\n`);
+        console.log(
+          `\nCleaning up temporary file ${i + 1} at ${t.tempFilePath}`
+        );
         await fs.unlink(t.tempFilePath);
       }
 
@@ -355,14 +363,13 @@ function getUploadOptions(args) {
  * @param {string} filePath file path to save the output; default path = {pathToLogFile}
  * @param {string} content The content to be written
  */
-async function logger(filePath, content) {
+async function logger(filePath, content, fileIndex) {
   try {
     if (!fsAsync.existsSync(baseDir)) {
       fsAsync.mkdir(baseDir, { recursive: true }, (err) => {});
     }
 
-    await writeContentToFile(filePath, content);
-    console.log(`Log written successfully to ${filePath}\n`);
+    await writeContentToFile(filePath, content, fileIndex);
   } catch (err) {
     console.error(err);
   }
@@ -373,9 +380,10 @@ async function logger(filePath, content) {
  * @param {string | fs.FileHandle} filePath path to the file
  * @param {string} data The content to be written
  */
-async function writeContentToFile(filePath, data) {
+async function writeContentToFile(filePath, data, fileIndex) {
   try {
     await fs.writeFile(filePath, data);
+    console.log(`\n\nLog ${fileIndex} written to ${filePath}\n`);
   } catch (err) {
     throw err;
   }
@@ -383,7 +391,7 @@ async function writeContentToFile(filePath, data) {
 
 module.exports = {
   isValidURL,
-  parsePathFlag,
+  parseFilePath,
   fetchAndUploadToSwarm,
   fileTypeIsNotDotTxt,
 };
