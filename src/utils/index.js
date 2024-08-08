@@ -167,7 +167,10 @@ async function fetchAndUploadToSwarm({
       deferred,
     });
 
-    console.log("\nUpload was successful. Logging result: \n");
+    if (res.length > 0) {
+      console.log("Upload completed. Logging result: \n");
+    }
+
     res.forEach((r, i) => {
       logger(
         pathToLogFile(getFileName(urls[i])),
@@ -194,6 +197,8 @@ async function fetchAndUploadToSwarm({
                 `
       );
     });
+
+    console.log(`\nLogs are written to ${baseDir}\n`);
   } catch (err) {
     console.error(`\nProcessing failed with ${err}\n`);
   }
@@ -223,11 +228,10 @@ async function getFilesAndUpload(argsObj) {
         throw new Error(`Not a valid URL! -> ${url}`);
       }
 
-      console.log(`Fetching file No. ${i + 1} from ${url}\n`);
       const resp = await axios.get(url, { responseType: "stream" });
 
       if (resp.status != 200) {
-        throw new Error(`Failed to download file No. ${i + 1} from ${url}`);
+        throw new Error(`Failed to download file No. ${i + 1}`);
       }
 
       const fileProps = {
@@ -246,32 +250,18 @@ async function getFilesAndUpload(argsObj) {
       resp.data.on("data", (chunk) => {
         // Update the number of bytes downloaded
         downloadedBytes += chunk.length;
-
-        // Calculate the percentage of the download that's complete
-        percentageComplete = Math.round(
-          (downloadedBytes / fileProps.size) * 100
-        );
-
-        // Log the progress to stdout
-        console.log(
-          `Download progress for file No. ${i + 1}: ${percentageComplete}%`
-        );
-
-        if (percentageComplete === 100) {
-          console.log(`\nPiping data to stream...\n`);
-        }
+        
+        showDownloadingProgress(downloadedBytes, fileProps.size, i);
       });
 
       resp.data.on("error", (err) => {
-        console.error("Error downloading file: ", err);
+        throw err;
       });
 
       const tempFilePath = path.join(
         os.tmpdir(),
         `temp-${fileProps.name}-${Date.now()}${fileProps.extension}`
       );
-      if (tempFilePath)
-        console.log(`Created temporary file ${i + 1} at ${tempFilePath}\n`);
 
       // save data to temporary location
       const writer = fsAsync.createWriteStream(tempFilePath);
@@ -309,7 +299,13 @@ async function getFilesAndUpload(argsObj) {
         }
       }
 
-      console.log(`Uploading stream No. ${i + 1} to Swarm Node...`);
+      const platform = "win32";
+      const clearLineAndMoveUp =
+        platform === "win32" ? "\x1b[0K\x1b[0G" : "\x1b[0K\r";
+
+      // Write the escape sequence to clear the line and move the cursor up
+      process.stdout.write(clearLineAndMoveUp);
+      process.stdout.write(`Uploading...`);
 
       const uploadResp = await bee.uploadFile(
         argsObj.postageBatchId,
@@ -321,9 +317,6 @@ async function getFilesAndUpload(argsObj) {
       );
 
       if (uploadResp.reference) {
-        console.log(
-          `\nCleaning up temporary file ${i + 1} at ${t.tempFilePath}`
-        );
         await fs.unlink(t.tempFilePath);
       }
 
@@ -333,10 +326,33 @@ async function getFilesAndUpload(argsObj) {
     // Execute all tasks in parallel and wait for all of them to complete
     const results = await Promise.all(uploadResults);
 
+    if (results.length) {
+      console.log(`\nUploading...`);
+    }
+
     return results; // Return an array of results from all uploads
   } catch (err) {
-    console.error(err);
     throw err;
+  }
+}
+
+function showDownloadingProgress(received, total, index) {
+  const platform = "win32"; // For Windows systems, use win32; otherwise, leave it empty
+  let percentage = ((received * 100) / total).toFixed(2);
+
+  // Define the escape sequence to clear the line and move
+  // the cursor to the beginning of the next line
+  const clearLineAndMoveUp =
+    platform === "win32" ? "\x1b[0K\x1b[0G" : "\x1b[0K\r";
+
+  // Write the escape sequence to clear the line and move the cursor up
+  process.stdout.write(clearLineAndMoveUp);
+  process.stdout.write(
+    `Download progress - File ${index + 1}: ${percentage}%.`
+  );
+
+  if (+percentage == 100) {
+    console.log(``);
   }
 }
 
@@ -383,7 +399,6 @@ async function logger(filePath, content, fileIndex) {
 async function writeContentToFile(filePath, data, fileIndex) {
   try {
     await fs.writeFile(filePath, data);
-    console.log(`\n\nLog ${fileIndex} written to ${filePath}\n`);
   } catch (err) {
     throw err;
   }
