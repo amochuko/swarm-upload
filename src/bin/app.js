@@ -1,9 +1,9 @@
 const {
-  parseFilePath,
-  fetchAndUploadToSwarm,
-  isValidURL,
   fileTypeIsNotDotTxt,
-} = require("../utils");
+  isValidURL,
+  parseFilePath,
+} = require("../utils/helpers");
+const { getUploadParams } = require("../utils/getUploadParams");
 
 const args = process.argv.slice(2);
 
@@ -97,7 +97,7 @@ async function main() {
   try {
     const urls = await parseFilePath(filePath);
 
-    await fetchAndUploadToSwarm({
+    await getUploadParams({
       beeNodeURL,
       urls,
       postageBatchId,
@@ -109,7 +109,6 @@ async function main() {
       deferred: Boolean(deferred),
     });
   } catch (err) {
-    console.error(err);
     throw err;
   }
 }

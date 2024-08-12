@@ -26,6 +26,7 @@
   "homepage": "https://github.com/amochuko/swarm-upload",
   "dependencies": {
     "@ethersphere/bee-js": "^7.1.0",
+    "async": "^3.2.5",
     "axios": "^1.7.2"
   }
 }
