@@ -27,10 +27,8 @@ const fs = require("fs").promises;
  * @param {boolean}argsObj.deferred [deferred] Determines if the uploaded data should be sent to the network immediately. Optional.
  * @param {number} argsObj.redundancyLevel [redundancyLevel] The level of preserving data
  */
- async function getFilesAndUpload(argsObj) {
+async function getFilesAndUpload(argsObj) {
   const bee = new Bee(argsObj.beeNodeURL);
-
-  const uploadOptions = getUploadOptions(argsObj);
 
   try {
     const taskA = argsObj.urls.map(async (url, i) => {
@@ -55,7 +53,6 @@ const fs = require("fs").promises;
       };
 
       let downloadedBytes = 0;
-      let percentageComplete = 0;
 
       // Listen to the 'data' event to receive chunks of data
       resp.data.on("data", (chunk) => {
@@ -85,7 +82,12 @@ const fs = require("fs").promises;
 
       const readStream = fsAsync.createReadStream(tempFilePath);
 
-      return { fileProps, tempFilePath, readStream };
+      return {
+        fileProps,
+        tempFilePath,
+        readStream,
+        resp /** `resp` to stream data directly to Bee Network */,
+      };
     });
 
     const taskAResponse = await Promise.all(taskA);
@@ -94,21 +96,7 @@ const fs = require("fs").promises;
       const filename = `${t.fileProps.name}${t.fileProps.extension}`;
 
       // update UploadOptions
-      const uploadOpts = {};
-      for (let key in uploadOptions) {
-        if (uploadOptions[key]) {
-          uploadOpts[key] = uploadOptions[key];
-        }
-        if (uploadOptions[key] && key == "size") {
-          uploadOpts[key] = t.fileProps.size;
-        }
-        if (uploadOptions[key] && key == "contentType") {
-          uploadOpts[key] = t.fileProps.contentType;
-        }
-        if (uploadOptions[key] && key == "redundancyLevel") {
-          uploadOpts[key] = uploadOptions[key];
-        }
-      }
+      const uploadOptions = getUploadOptions(argsObj, t.fileProps);
 
       const platform = "win32";
       const clearLineAndMoveUp =
@@ -123,7 +111,7 @@ const fs = require("fs").promises;
         t.readStream,
         filename,
         {
-          ...uploadOpts,
+          ...uploadOptions,
         }
       );
 

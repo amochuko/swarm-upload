@@ -12,7 +12,7 @@ const mimeTypes = {
  * @param {any} filePath The path to the file
  * @return extension of file
  */
- function getFileExtension(filePath) {
+function getFileExtension(filePath) {
   return path.extname(filePath).toLowerCase();
 }
 
@@ -31,7 +31,7 @@ function getFileType(filePath) {
  * @param {any} filePath
  * @returns bool
  */
- function fileTypeIsNotDotTxt(filePath) {
+function fileTypeIsNotDotTxt(filePath) {
   const fileType = getFileType(filePath);
   return fileType !== Object.values(mimeTypes)[0];
 }
@@ -60,7 +60,7 @@ function normalizeFilePath(filePath) {
  * @param {string} url path to the file
  * @returns boolean
  */
- function isValidURL(url) {
+function isValidURL(url) {
   const urlRegex = /^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$/;
   return urlRegex.test(url);
 }
@@ -71,7 +71,7 @@ function normalizeFilePath(filePath) {
  * @param {string} url The location of the file
  * @returns file content
  */
- async function parseFilePath(url) {
+async function parseFilePath(url) {
   // if path is a single url to a file
   if (isValidURL(url)) {
     return [url];
@@ -113,13 +113,13 @@ async function readFileFromFilePath(filePath) {
  * @param {string} url The url to file
  * @returns
  */
-  function getFileName(url) {
+function getFileName(url) {
   return path.basename(decodeURIComponent(url))
     ? path.basename(decodeURIComponent(url)).split(".")[0]
     : new Date().toISOString();
 }
 
-  function showDownloadingProgress(received, total, index) {
+function showDownloadingProgress(received, total, index) {
   const platform = "win32"; // For Windows systems, use win32; otherwise, leave it empty
   let percentage = ((received * 100) / total).toFixed(2);
 
@@ -139,7 +139,7 @@ async function readFileFromFilePath(filePath) {
   }
 }
 
- function getUploadOptions(args) {
+function getUploadOptions(args, fileProps) {
   const opts = {};
 
   for (let key in args) {
@@ -154,12 +154,29 @@ async function readFileFromFilePath(filePath) {
     }
   }
 
-  return opts;
+  // update UploadOptions
+  const uploadOpts = {};
+  for (let key in opts) {
+    if (opts[key]) {
+      uploadOpts[key] = opts[key];
+    }
+    if (opts[key] && key == "size") {
+      uploadOpts[key] = fileProps.size;
+    }
+    if (opts[key] && key == "contentType") {
+      uploadOpts[key] = fileProps.contentType;
+    }
+    if (opts[key] && key == "redundancyLevel") {
+      uploadOpts[key] = opts[key];
+    }
+  }
+
+  return uploadOpts;
 }
 
- const baseDir = path.join(process.cwd(), "swarm_upload_logs");
+const baseDir = path.join(process.cwd(), "swarm_upload_logs");
 
- const pathToLogFile = (filename) => {
+const pathToLogFile = (filename) => {
   return path.join(baseDir, `${filename}-${new Date().toISOString()}.txt`);
 };
 
@@ -168,7 +185,7 @@ async function readFileFromFilePath(filePath) {
  * @param {string} filePath file path to save the output; default path = {pathToLogFile}
  * @param {string} content The content to be written
  */
- async function logger(filePath, content, fileIndex) {
+async function logger(filePath, content, fileIndex) {
   try {
     if (!fsAsync.existsSync(baseDir)) {
       fsAsync.mkdir(baseDir, { recursive: true }, (err) => {});
@@ -192,7 +209,6 @@ async function writeContentToFile(filePath, data, fileIndex) {
     throw err;
   }
 }
-
 
 module.exports = {
   getFileName,
