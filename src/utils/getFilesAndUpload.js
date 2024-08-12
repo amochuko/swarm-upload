@@ -98,14 +98,6 @@ async function getFilesAndUpload(argsObj) {
       // update UploadOptions
       const uploadOptions = getUploadOptions(argsObj, t.fileProps);
 
-      const platform = "win32";
-      const clearLineAndMoveUp =
-        platform === "win32" ? "\x1b[0K\x1b[0G" : "\x1b[0K\r";
-
-      // Write the escape sequence to clear the line and move the cursor up
-      process.stdout.write(clearLineAndMoveUp);
-      process.stdout.write(`Uploading...`);
-
       const uploadResp = await bee.uploadFile(
         argsObj.postageBatchId,
         t.readStream,
